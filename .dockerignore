@@ -1,0 +1,9 @@
+node_modules
+dist
+.art-backup
+.claude
+.git
+Dockerfile
+.dockerignore
+.DS_Store
+*.log

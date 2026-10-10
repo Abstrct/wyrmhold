@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wyrmhold",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5191",
+        "--strictPort"
+      ],
+      "port": 5191
+    },
+    {
+      "name": "wyrmhold-devnet",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_GRASS_URL=off",
+        "VITE_LCD_URL=http://127.0.0.1:31317",
+        "VITE_RPC_WS_URL=ws://127.0.0.1:36657/websocket",
+        "STRUCTS_LCD=http://127.0.0.1:31317",
+        "npx",
+        "vite",
+        "--config",
+        "../wyrmhold-forge/devnet/vite.config.mjs",
+        "--port",
+        "5192",
+        "--strictPort"
+      ],
+      "port": 5192
+    }
+  ]
+}
