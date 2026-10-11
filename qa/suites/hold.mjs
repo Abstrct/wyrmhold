@@ -33,6 +33,9 @@ export default async function (t, ctx) {
     expect.eq(census.roots, census.units.length, 'one root per unit');
     expect.eq(census.tags, census.units.length, 'one name tag per unit');
     for (const id of ids) { const w = await ctl(page, `k.where(${JSON.stringify(id)})`); expect.ok(w && w.every(Number.isFinite), `unit ${id} has a finite position`, w); expect.ok(Math.hypot(w[0], w[2]) < 80 && Math.abs(w[1]) < 60, `unit ${id} is near the isle`, w); }
+    // a tag is placed on the next drawn frame, which can take seconds under software rendering: wait for one
+    await page.waitFor(`[...document.querySelectorAll('.unit-tag')].some((e) => e.style.transform)`, { what: 'the name tags to be placed', timeout: 30000 });
+    await page.eval(`await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
     const tags = await page.eval(`[...document.querySelectorAll('.unit-tag')].map((e) => ({ t: e.textContent, tf: e.style.transform, o: Number(e.style.opacity || 1) }))`);
     // a shown tag with no place, or at the very corner, is a unit whose position could not be projected
     const stuck = tags.filter((x) => x.o > 0 && (!x.tf || /translate\(0(\.0)?px, ?0(\.0)?px\)/.test(x.tf)));

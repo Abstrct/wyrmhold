@@ -508,6 +508,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         var bb = new T.Box3().setFromObject(holder);
         info.tagY = Math.max(1.2, bb.max.y - holder.position.y) + 0.5;
         info.tag = document.createElement('span'); info.tag.className = 'unit-tag'; info.tag.textContent = u.label;
+        // hidden until its first frame places it, or it shows for a moment in the corner of the screen
+        info.tag.style.opacity = '0';
         tagBox.appendChild(info.tag);
       }
       return info;

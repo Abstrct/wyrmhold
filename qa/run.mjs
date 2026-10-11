@@ -48,6 +48,10 @@ if (unknown.length) { console.error('unknown suite(s): ' + unknown.join(', ')); 
 const chosen = SUITES.filter(([n]) => !wanted.length || wanted.includes(n));
 
 mkdirSync(out, { recursive: true });
+// a stray error in the rig itself is noted in the report, never allowed to end the run unreported
+const strays = [];
+process.on('unhandledRejection', (e) => { strays.push(String(e && e.stack || e).slice(0, 400)); console.error('  rig   unhandled: ' + String(e && e.message || e)); });
+process.on('uncaughtException', (e) => { strays.push(String(e && e.stack || e).slice(0, 400)); console.error('  rig   uncaught: ' + String(e && e.message || e)); });
 const report = new Report(out);
 const ledger = new Ledger(null);
 await ledger.start({ blockMs });
@@ -71,6 +75,7 @@ for (const [name, pillar] of chosen) {
   if (app.alive && !app.alive()) { report.note('the game server died during ' + name + ': ' + app.logs().slice(-600).replace(/\n/g, ' | ')); break; }
 }
 if (app.logs && /error|Error/.test(app.logs())) report.note('game server log: ' + app.logs().split('\n').filter((l) => /error/i.test(l)).slice(-5).join(' | '));
+if (strays.length) report.note(`the rig itself hit ${strays.length} stray error(s): ` + strays.slice(0, 3).join(' | '));
 const s = report.write({ app: app.url, chrome: browser.version, ledger: ledger.lcdUrl, suites: chosen.map(([n]) => n) });
 console.log(`\n${s.pass} passed · ${s.fail} failed (${s.blocking} blocking) · ${s.warn} with findings · ${s.skip} skipped · ${(s.ms / 1000).toFixed(0)}s\nreport: ${out}/report.md`);
 if (!keep) { await browser.close(); await app.stop(); await ledger.stop(); }

@@ -22,7 +22,10 @@ export class Ledger {
 
   async start({ lcdPort = 0, wsPort = 0, blockMs = 1000 } = {}) {
     this.blockMs = blockMs;
-    this.http = createServer((req, res) => this.handle(req, res));
+    // a client that gives up mid-request (a timeout, a page that navigates away) aborts the socket: that is
+    // the client's right, and must never take the mock ledger down with it
+    this.http = createServer((req, res) => { this.handle(req, res).catch(() => { try { res.destroy(); } catch { /* gone */ } }); });
+    this.http.on('clientError', (_e, socket) => { try { socket.destroy(); } catch { /* gone */ } });
     await new Promise((r) => this.http.listen(lcdPort, '127.0.0.1', r));
     this.lcdPort = this.http.address().port;
     this.wsServer = createServer((req, res) => { res.writeHead(426); res.end(); });
@@ -92,7 +95,7 @@ export class Ledger {
     if (this.faults.latencyMs) await new Promise((r) => setTimeout(r, this.faults.latencyMs));
     if (this.faults.failPaths.some((re) => re.test(path))) return json(res, this.faults.failStatus, { code: 13, message: 'the keeper stumbled', details: [] });
     let body = '';
-    if (req.method === 'POST') { for await (const c of req) body += c; }
+    if (req.method === 'POST') { try { for await (const c of req) body += c; } catch { return; } }
     try { return this.route(req.method, path, url.searchParams, body, res); }
     catch (e) { return json(res, 500, { code: 2, message: String(e && e.message || e) }); }
   }
