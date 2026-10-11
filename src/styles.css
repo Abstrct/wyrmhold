@@ -626,6 +626,10 @@ dl.facts dt { font-size: 11px; }
 .cursor-tip span { font-size: 12.5px; color: var(--muted); }
 /* the folded guide's pill keeps the bottom-left corner: left panels stop short of it */
 @media (min-width: 721px) { body.has-pill .cols > .col-l { max-height: calc(100% - 66px); } }
+/* on the Hold the rites bar already stands between the columns and the pill: the roster keeps its room */
+@media (min-width: 721px) { body.has-pill[data-route="hold"] .cols > .col-l { max-height: 100%; } }
+/* short laptop screens: the rites tiles tighten so the roster shows more than two beasts */
+@media (min-width: 721px) and (max-height: 820px) { .rites { padding: 8px 10px; } .rite { min-height: 68px; padding: 6px 12px 5px; gap: 1px; } .rite-mark { width: 28px; height: 28px; } .rite b { font-size: 17px; } }
 /* phone Atlas: the chosen isle's card comes before a list that scrolls in its own box */
 @media (max-width: 720px) {
   .cols > [aria-label="Wardens"] { max-height: 60vh; order: 2; }
@@ -635,6 +639,8 @@ dl.facts dt { font-size: 11px; }
 @media (max-width: 560px) { .proclaim { width: calc(100vw - 32px); padding: 20px 18px; } .proclaim-title { font-size: 34px; line-height: 1.1; } .proclaim-line { font-size: 16px; } }
 .codex-jumps { margin-top: 18px; gap: 6px 14px; font-size: 15px; }
 .codex-jumps .label { margin-right: 2px; }
+/* the jump links are touch targets too: a finger needs more than a line of text */
+.codex-jumps a, .codex-jumps button { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; }
 @media (min-width: 721px) { body.has-pill .hud > .rites { align-self: flex-end; } }
 /* trouble told beside the control that caused it */
 .inline-err { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 122, 77, .5); background: rgba(60, 20, 16, .55); font-size: 14px; line-height: 1.4; color: var(--ember-ink); }
@@ -697,6 +703,8 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 /* a phone held sideways is wide but short: the Gate flows top to bottom (as on a phone held upright)
    instead of centring its words under the bar */
 @media (min-width: 721px) and (max-height: 560px) {
+  /* the Gate flows taller than the screen here: it must scroll, or "Swear the oath" is out of reach */
+  body[data-route="gate"] .screen { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .gate-hud { position: relative; }
   .gate-main { position: relative; left: auto; top: auto; transform: none; max-width: 720px; padding: 18px clamp(16px, 6vw, 96px) 24px; }
   .gate-foot { position: relative; padding-bottom: 80px; }
@@ -705,4 +713,15 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 @media (min-width: 721px) and (max-height: 560px) {
   body[data-route="hold"] .hud, body[data-route="skirmish"] .hud, body[data-route="atlas"] .hud, body[data-route="bestiary"] .hud { overflow-y: auto; }
   body[data-route="hold"] .cols, body[data-route="skirmish"] .cols, body[data-route="atlas"] .cols, body[data-route="bestiary"] .cols { flex: none; min-height: 300px; }
+}
+
+/* short laptop screens (1024×700, 1280×720): the Hold's roster keeps room for a few beasts. Its realm chips
+ * share one row that scrolls sideways, and the columns never shrink below a floor; a screen shorter still
+ * scrolls its panels past the sky rather than squeezing the list to nothing. */
+@media (min-width: 721px) and (max-height: 780px) {
+  .roster-panel .chips { flex: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .roster-panel .chips::-webkit-scrollbar { display: none; }
+  .roster-panel .chip { flex: none; }
+  body[data-route="hold"] .hud { overflow-y: auto; }
+  body[data-route="hold"] .cols { flex: 1 1 0; min-height: 230px; }
 }

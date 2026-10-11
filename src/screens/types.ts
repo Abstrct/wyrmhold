@@ -28,6 +28,8 @@ export function mountScene<T extends { dispose(): void }>(canvas: HTMLCanvasElem
       return;
     }
     canvas.parentElement?.classList.remove('no-world');
+    // a handle for the proving ground (qa/): tests read the scene through it, the game never does
+    (canvas as unknown as { __wyrmCtl?: T }).__wyrmCtl = ctl;
     try { then?.(ctl); } catch (e) { console.error('[wyrmhold] after the world woke', e); }
   };
   requestAnimationFrame(go);

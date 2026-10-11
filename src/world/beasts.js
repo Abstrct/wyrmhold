@@ -923,7 +923,9 @@ function ghoulArcher(o) {
   for (var ci = 0; ci < 7; ci++) {
     var ca = (ci / 6 - 0.5) * 1.6, cl = 1.0 + ((ci * 7) % 3) * 0.22, cw = 0.15;
     var strip = new T.PlaneGeometry(cw, cl, 1, 6); strip.translate(0, -cl / 2, 0);
-    var sp = strip.attributes.position; for (var sv = 0; sv < sp.count; sv++) { var yy0 = sp.getY(sv); sp.setZ(sv, -Math.pow(-yy0, 1.4) * 0.12); }
+    // the top row sits at y = 0 only up to float32 rounding: a hair above it, -yy0 goes negative and
+    // a fractional power of a negative is NaN, which once sank the whole Ghoul Archer (and the camera)
+    var sp = strip.attributes.position; for (var sv = 0; sv < sp.count; sv++) { var yy0 = sp.getY(sv); sp.setZ(sv, -Math.pow(Math.max(0, -yy0), 1.4) * 0.12); }
     strip.rotateY(ca); strip.translate(Math.sin(ca) * 0.3, 2.1, -Math.cos(ca) * 0.3 + 0.1);
     cape.push(prep(strip, function (yy) { return mixc(rgb(0x221e28), rgb(0x3e3848), smooth(0.9, 2.1, yy)); }));
   }

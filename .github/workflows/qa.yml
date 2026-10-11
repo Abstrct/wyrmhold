@@ -1,0 +1,38 @@
+# The proving ground (qa/): the quick gate on every push and pull request, everything nightly.
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  proving-ground:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      # the quick gate on pushes and pull requests; the whole ground on the nightly run
+      - if: github.event_name != 'schedule'
+        run: node qa/run.mjs assets logic smoke hold --out qa/reports/ci
+        env:
+          QA_CHROME: /usr/bin/google-chrome
+      - if: github.event_name == 'schedule'
+        run: node qa/run.mjs --net --out qa/reports/ci
+        env:
+          QA_CHROME: /usr/bin/google-chrome
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: qa-report
+          path: qa/reports/ci

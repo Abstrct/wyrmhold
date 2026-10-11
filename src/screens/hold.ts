@@ -202,10 +202,12 @@ export function hold(ctx: Ctx): Screen {
     // a brand-new warden hears one next step at a time: first meet the Wyrm (Ysolde says so), then this
     else if (ground > 0 && !owned(p, 14) && mine && pathHas('wyrm')) omen('teal', `The ground of your isle still holds ${ground} sheaves of wildroot. A Root Delver would dig them up.`, ['Summon a Delver', () => summonDialog(p, 14)]);
     const sorted = queued.map((q, i) => ({ ...q, i })).sort((a, b) => a.rank - b.rank || a.i - b.i);
-    const shown = omensAll ? sorted : sorted.slice(0, 2);
+    // a short screen hears the most urgent notice only, so the roster below keeps its room
+    const room = matchMedia('(min-width: 721px) and (max-height: 780px)').matches ? 1 : 2;
+    const shown = omensAll ? sorted : sorted.slice(0, room);
     omens.append(...shown.map((q) => q.el));
-    if (sorted.length > 2) omens.append(h('button', { type: 'button', class: 'omens-more', 'data-key': 'omens-more', onclick: () => { omensAll = !omensAll; keepFocus(omens, () => paintOmens(player())); } },
-      omensAll ? 'Show fewer' : `${sorted.length - 2} more ${sorted.length - 2 === 1 ? 'notice' : 'notices'}`));
+    if (sorted.length > room) omens.append(h('button', { type: 'button', class: 'omens-more', 'data-key': 'omens-more', onclick: () => { omensAll = !omensAll; keepFocus(omens, () => paintOmens(player())); } },
+      omensAll ? 'Show fewer' : `${sorted.length - room} more ${sorted.length - room === 1 ? 'notice' : 'notices'}`));
   }
   let omensAll = false;
 
@@ -335,6 +337,17 @@ export function hold(ctx: Ctx): Screen {
       link('bestiary', 'Bestiary', 'know your beasts', 'var(--verdigris)', '#/bestiary'));
   }
 
+  /** A dialog the Hold opens gives focus back to whatever opened it when it closes, however it closes. */
+  function returnFocusOnClose(veil: HTMLElement) {
+    const opener = document.activeElement as HTMLElement | null;
+    const mo = new MutationObserver(() => {
+      if (veil.isConnected) return;
+      mo.disconnect();
+      if (opener && opener.isConnected && (!document.activeElement || document.activeElement === document.body)) opener.focus({ preventScroll: true });
+    });
+    mo.observe(document.body, { childList: true });
+  }
+
   function summonDialog(p: PlayerState, only?: number) {
     const ch = empire.charge(p);
     const list = h('div', { class: 'scroll-y summon-list', style: { padding: '4px 2px', maxHeight: '62vh' } });
@@ -379,7 +392,10 @@ export function hold(ctx: Ctx): Screen {
             `Spare mana: ${fmtMana(p.capacity + p.connectionCapacity - p.load - p.structsLoad)} · Breath: ${fmtBreath(ch)}. Each summoning takes its mana the moment the circle is drawn.`)),
           h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => veil.remove() }, '✕')),
         list));
+    returnFocusOnClose(veil);
     document.body.append(veil);
+    // keyboard and screen-reader wardens land inside, on the first kind they may summon
+    ((veil.querySelector('.card-btn:not(:disabled)') || veil.querySelector('.icon-btn')) as HTMLElement | null)?.focus();
   }
 
   function feedDialog(p: PlayerState, s: OwnedStruct) {
@@ -397,7 +413,9 @@ export function hold(ctx: Ctx): Screen {
           if (u > p.alpha) { toast('You do not hold that much alpha.', 'warn'); return; }
           veil.remove(); rite(p, () => act.infuseGenerator(p, s, u), false);
         } }, 'Feed it'))));
+    returnFocusOnClose(veil);
     document.body.append(veil);
+    amt.focus(); amt.select();
   }
 
   function guardDialog(p: PlayerState, s: OwnedStruct) {
@@ -408,7 +426,9 @@ export function hold(ctx: Ctx): Screen {
       h('div', { class: 'stack scroll-y', style: { maxHeight: '50vh' } }, ...allies.map((a) => h('button', { type: 'button', class: 'choice', onclick: () => { veil.remove(); rite(p, () => act.defend(p, s, a.id)); } },
         // several of a kind are told apart by number, never by their ledger mark
         h('span', null, beastName(a.typeId) + (allies.filter((x) => x.typeId === a.typeId).length > 1 ? ` ${allies.filter((x) => x.typeId === a.typeId).indexOf(a) + 1}` : ''), h('small', null, a.type?.category === 'planet' ? 'Hallow' : REALM_NAME[realmOf(a)])), h('span', { class: 'hearts', role: 'img', 'aria-label': `vigor ${a.health} of ${a.type?.maxHealth || 0}` }, hearts(a.health, a.type?.maxHealth || 0)))))));
+    returnFocusOnClose(veil);
     document.body.append(veil);
+    (veil.querySelector('.choice') as HTMLElement | null)?.focus();
   }
 
   function paintBanner(p: PlayerState | null) {

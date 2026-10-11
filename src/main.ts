@@ -74,6 +74,17 @@ txq.onSettled((j) => {
   else if (j.status === 'failed') toast(retell(j.label).replace(/ · chant of \d+$/, '') + ' failed: ' + retellError(j.error || 'the ledger refused'), 'enemy', 7000, { label: 'Again', run: () => txq.retry(j.id) });
 });
 
+/* Escape closes the topmost dialog, the way a warden expects. A dialog with its own "Not now" or close
+ * button is closed through it (so a question answers "no"); the Oath, which listens for itself, is left alone. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const veils = document.querySelectorAll('.veil');
+  const veil = veils[veils.length - 1] as HTMLElement | undefined;
+  if (!veil || veil.querySelector('#oath-title')) return;
+  const btn = veil.querySelector<HTMLElement>('button[aria-label="Close"], .btn.ghost');
+  if (btn) btn.click(); else veil.remove();
+});
+
 async function boot() {
   guardTheVeil();
   bootStep.textContent = 'Reaching the ledger…';

@@ -8,10 +8,10 @@ import { resetTour, holdTour } from './tour';
 let open: HTMLElement | null = null;
 
 const LOOP: [string, string, string, string][] = [
-  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your isle. Each summoning is sung by a chant that your Hold sings for you.', '#/hold'],
+  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your Hold. Each summoning is sung by a chant that your Hold sings for you. The Bestiary shows every beast before you bind it.', '#/hold'],
   ['2', 'Dig and brew', 'The Delver digs up wildroot; the Cauldron brews it into alpha. Wildroot can be stolen; alpha cannot.', '#/hold'],
-  ['3', 'Grow', 'Tithe alpha to your coven’s wellspring for more mana, then summon beasts and wards.', '#/leyweave'],
-  ['4', 'Raid', 'Find an isle with unbrewed wildroot in the Sky Atlas, ride out, fell its Elder Wyrm, and plunder.', '#/atlas'],
+  ['3', 'Grow', 'In the Leyweave, tithe alpha to your coven’s wellspring for more mana, then summon beasts and wards.', '#/leyweave'],
+  ['4', 'Raid', 'Find an isle with unbrewed wildroot in the Sky Atlas and ride out. In the Skirmish, fell its Elder Wyrm, and the plunder is yours.', '#/atlas'],
 ];
 
 export function openHelp() {

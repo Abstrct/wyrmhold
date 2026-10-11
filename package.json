@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "start": "node serve.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "qa": "node qa/run.mjs",
+    "qa:list": "node qa/run.mjs --list"
   },
   "dependencies": {
     "@noble/curves": "^2.4.0",

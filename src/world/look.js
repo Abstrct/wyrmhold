@@ -524,10 +524,39 @@ var RaysShader = {
 };
 
 /* ------------------------------------------------------------------- stage */
+/* three keeps a 'dispose' hook from every renderer on every texture that renderer ever drew, and
+ * renderer.dispose() leaves those hooks behind. A texture that outlives its renderer (a cached glow, the
+ * rune discs, three's own lighting table) then keeps the whole dead renderer alive, with its programs
+ * and its last scene: about 10 MB lost on every visit to a screen. Each renderer's hook is learned from a
+ * probe texture when it is made, every texture that hook lands on is noted (weakly), and the hooks are
+ * taken back when the renderer is let go. */
+var HOOKS = new WeakMap();
+var _texAdd = T.Texture.prototype.addEventListener;
+T.Texture.prototype.addEventListener = function (type, fn) {
+  if (type === 'dispose') { var seen = HOOKS.get(fn); if (seen) seen.push(new WeakRef(this)); }
+  return _texAdd.call(this, type, fn);
+};
+export function holdTextureHooks(renderer) {
+  var probe = new T.DataTexture(new Uint8Array(4), 1, 1); probe.needsUpdate = true;
+  try { renderer.initTexture(probe); } catch (e) { return function () {}; }
+  var list = probe._listeners && probe._listeners.dispose, fn = list && list[list.length - 1];
+  if (!fn) return function () {};
+  var seen = []; HOOKS.set(fn, seen);
+  return function release() {
+    for (var i = 0; i < seen.length; i++) { var t = seen[i].deref(); if (t) t.removeEventListener('dispose', fn); }
+    seen.length = 0; HOOKS.delete(fn);
+    probe.removeEventListener('dispose', fn); probe.dispose();
+  };
+}
+
 export function Stage(canvas, o) {
   o = o || {};
   var md = o.mood || mood('gate');
+  // a screen that rebuilds its scene hands the same canvas, and so the same GL context, to a new renderer:
+  // unpack state the old one left set (image flips) makes three's empty 3D textures fail to upload
+  if (canvas.__wyrmOwner) { try { var old = canvas.getContext('webgl2'); if (old) { old.pixelStorei(old.UNPACK_FLIP_Y_WEBGL, false); old.pixelStorei(old.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); } } catch (e) { /* a fresh context then */ } }
   var renderer = new T.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance' });
+  var releaseHooks = holdTextureHooks(renderer);
   // phones and small screens start lighter: fewer samples, a smaller shadow map, a lower pixel ratio
   var light = lightTier();
   var maxPR = Math.min(window.devicePixelRatio || 1, light ? 1.5 : 2), pr = Math.min(maxPR, light ? 1.25 : 1.75);
@@ -644,6 +673,7 @@ export function Stage(canvas, o) {
         if (ob.material) (Array.isArray(ob.material) ? ob.material : [ob.material]).forEach(function (m) { m.dispose(); });
       });
       composer.dispose && composer.dispose(); rt.dispose();
+      releaseHooks();
       renderer.dispose();
       // Release the GPU context once this canvas has left the page (browsers cap live contexts and
       // drop the oldest, which would be the guide's portrait). A screen that rebuilds its scene on

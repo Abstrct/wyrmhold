@@ -69,6 +69,8 @@ export function speak(text: string): string {
   if (!text) return text;
   let s = String(text);
   const R: [RegExp, string | ((...a: string[]) => string)][] = [
+    // the node's wrappers around a refusal say nothing to a warden: keep only the reason inside them
+    [/\brpc error: code = \w+ desc = /gi, ''], [/\bfailed to execute message; message index: \d+:\s*/gi, ''],
     [/^Move (.+?) → (?:fleet|planet|warband|isle) (space|air|land|water) \d+/, (_m: string, who: string, a: string) => `${who} soars into ${({ space: 'Starfall', air: 'the Skies', land: 'the Wilds', water: 'the Deeps' } as Record<string, string>)[a]}`],
     [/\b(space|air|land|water) (\d+)\b/g, (_m: string, a: string, n: string) => `${({ space: 'Starfall', air: 'Skies', land: 'Wilds', water: 'Deeps' } as Record<string, string>)[a]} ${n}`],
     [/\bambits?\b/gi, 'realm'], [/\bMove\b/g, 'Soar'],
@@ -78,6 +80,8 @@ export function speak(text: string): string {
     // ledger errors name things by their marks; the warden needs the meaning, not the number
     [/\b(?:planet|isle) \(\d+-\d+\) is empty, nothing to mine\b/gi, 'your isle is spent: there is nothing left to dig. Seek a new isle'],
     [/\s*\(\d+-\d+\)/g, ''],
+    // a bare mark after a thing's name says nothing to a warden: "fleet 9-12 is away" → "warband is away"
+    [/\b(fleet|warband|struct|beast|planet|isle|guild|coven|reactor|wellspring|substation|ley shrine|player|warden|allocation|leyline|provider|agreement|address|soulstone) \d+-\d+\b/gi, '$1'],
     [/\bLCD\b/g, 'The ledger-keeper'], [/\benlisting\b/gi, 'swearing the oath'],
     [/(\d[\d,.]*) kW\b/g, (_m: string, n: string) => `${Math.round(Number(n.replace(/,/g, '')) * 1000).toLocaleString('en-US')} mana`],
     [/(\d[\d,.]*) W\b/g, '$1 mana'],

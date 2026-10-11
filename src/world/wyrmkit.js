@@ -4,7 +4,7 @@
  * post) lives in look.js, the land in land.js, the great beasts in beasts.js; this file holds
  * the bestiary index and the scenes. Every scene returns a small controller the page drives. */
 import * as T from 'three';
-import { TAU, rng, hashStr, makeNoise, clamp, lerp, smooth, M, G, mesh, glowSprite, softDot, runeDisc, runeTexture, Stage, mood, sky, cloudSea, cloudscape, cloudBank, lights, motes, U, MOODS, seaShadow, shootingStars, nameplate } from './look.js';
+import { TAU, rng, hashStr, makeNoise, clamp, lerp, smooth, M, G, mesh, glowSprite, softDot, runeDisc, runeTexture, Stage, mood, sky, cloudSea, cloudscape, cloudBank, lights, motes, U, MOODS, seaShadow, shootingStars, nameplate, holdTextureHooks } from './look.js';
 import { isle, dressIsle, crystal, keep, waterfall, floraGeo, CANOPIES, prep, rgb, mixc, at, taperTube, hamlet, lanterns, flock as birdFlock } from './land.js';
 import { wyrm, SpineBody, onFrame, keys, BESTIARY } from './beasts.js';
 import { hallow } from './hallows.js';
@@ -28,10 +28,27 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 
   function beast(type, o) {
     type = +type;
-    if (BESTIARY[type]) return BESTIARY[type](o);
-    if (BEASTS[type]) return BEASTS[type](o);
-    return hallow(type, {});
+    var b = BESTIARY[type] ? BESTIARY[type](o) : BEASTS[type] ? BEASTS[type](o) : hallow(type, {});
+    return sane(b, type);
   }
+  /* A mesh with a NaN in it is never drawn, but it poisons everything that measures it: the seat on
+   * the ground, the camera's target, the name tag. Such a part is dropped and said once, so the rest
+   * of the beast still stands and the screen can never go black over it. */
+  function sane(b, type) {
+    var bad = [];
+    b.obj.traverse(function (m) {
+      var pa = m.geometry && m.geometry.attributes && m.geometry.attributes.position;
+      if (!pa) return;
+      var a = pa.array;
+      for (var i = 0; i < a.length; i++) if (a[i] !== a[i] || a[i] === Infinity || a[i] === -Infinity) { bad.push(m); return; }
+    });
+    if (bad.length) {
+      console.error('[wyrmhold] beast ' + type + ': ' + bad.length + ' part(s) with a broken shape were left out');
+      bad.forEach(function (m) { if (m.parent) m.parent.remove(m); });
+    }
+    return b;
+  }
+  K.sane = sane;
   K.beast = beast;
   K.dragon = wyrm;
 
@@ -129,7 +146,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     });
     return {
       goal: goal,
-      to: function (target, dist, el, az) { if (target) goal.target.copy(target); if (dist) goal.dist = dist; if (el != null) goal.el = el; if (az != null) goal.az = az; idle = 0; },
+      // a target that is not a number would carry the camera off into nothing for good: refuse it
+      to: function (target, dist, el, az) { if (target && isFinite(target.x) && isFinite(target.y) && isFinite(target.z)) goal.target.copy(target); else if (target) console.error('[wyrmhold] the camera was asked to look at nowhere', target); if (dist && isFinite(dist)) goal.dist = dist; if (el != null && isFinite(el)) goal.el = el; if (az != null && isFinite(az)) goal.az = az; idle = 0; },
       dispose: function () { canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('wheel', wheel); }
     };
   }
@@ -411,6 +429,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       }
       if (top === -Infinity) top = I.heightAt(holder.position.x, holder.position.z);
       holder.position.y = top - _box.min.y - 0.04;
+      // a shape that could not be measured stands on the ground rather than nowhere
+      if (!isFinite(holder.position.y)) holder.position.y = I.heightAt(holder.position.x, holder.position.z);
     }
     // a unit's own copy of a shared material: clone() drops the shader patch (rim, grain, scales), so carry it over
     function ownCopy(src) {
@@ -582,6 +602,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         if (selected && units[selected]) ctl.select(selected, true);
       },
       has: function (id) { return !!units[id]; },
+      /** For the proving ground: where a unit stands, and what the scene holds. */
+      where: function (id) { return units[id] ? worldPos(units[id]).toArray() : null; },
+      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected }; },
       add: function (u, quiet) {
         var info = placeUnit(u);
         if (quiet) return u.id;
@@ -1079,6 +1102,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     function centerOf(id) { var u = units[id]; if (!u) return null; var v = u.holder.position.clone(); v.y += u.realm === 'wilds' ? 1.6 : 0.6; return v; }
     st.add(tags.frame); // after the bob and the camera have moved
     var ctl = {
+      where: function (id) { return units[id] ? units[id].holder.position.toArray() : null; },
+      census: function () { return { units: Object.keys(units), roots: roots.length }; },
       mark: function (key, id) { if (marks[key]) marks[key].id = id; },
       /** Send a side's warband over the other isle, or bring it home; it flies there. */
       abroad: function (side, on) {
@@ -1187,6 +1212,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     o = o || {};
     var size = o.size || 96;
     var renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    var releaseHooks = holdTextureHooks(renderer);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(size, size, false);
     renderer.outputColorSpace = T.SRGBColorSpace;
@@ -1214,7 +1240,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       halo.material.opacity = 0.25 + 0.12 * Math.sin(t * 1.7);
       renderer.render(scene, cam);
     })();
-    return { dispose: function () { cancelAnimationFrame(raf); renderer.dispose(); } };
+    return { dispose: function () { cancelAnimationFrame(raf); releaseHooks(); renderer.dispose(); } };
   };
 
   /* -------------------------------------------------- mount helper for pages */

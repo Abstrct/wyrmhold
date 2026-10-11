@@ -12,8 +12,10 @@ function db(): Promise<IDBDatabase> {
     let idb: IDBFactory | undefined;
     try { idb = (globalThis as { indexedDB?: IDBFactory }).indexedDB; } catch { idb = undefined; }
     if (!idb) { reject(new Error('This browser has no IndexedDB, so it cannot hold a device key')); return; }
-    // An open that never settles (seen on Safari's first open) must not hang boot.
-    const t = setTimeout(() => reject(new Error('IndexedDB did not open in time')), 4000);
+    // An open that never settles (seen on Safari's first open) must not hang boot. A device busy
+    // compiling the sky can take several seconds to answer, so the wait is generous: giving up early
+    // tells a warden their soulstone is lost when it is only slow.
+    const t = setTimeout(() => reject(new Error('IndexedDB did not open in time')), 15000);
     const req = idb.open(DB, 1);
     req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); };
     req.onsuccess = () => { clearTimeout(t); resolve(req.result); };
