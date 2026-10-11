@@ -80,5 +80,39 @@ export default async function (t, ctx) {
     expect.ok(hit, 'a tap on the sky picked a beast', pos.slice(0, 3));
     if (hit && hit.got !== hit.want) c.warn(`tapped ${hit.want}, picked ${hit.got} (a neighbour was in front)`);
   });
+  await t.test('touch: two fingers pinch to zoom the sky; a pinch never picks a beast, a tap still does', 'S1', async (c) => {
+    await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: { width: 390, height: 844, mobile: true } });
+    await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(2500);
+    // the open sky: a point on the canvas that no panel covers
+    const sky = await page.eval(`(() => { const c = document.querySelector('#app .stage canvas'); const r = c.getBoundingClientRect(); for (let y = 140; y < 420; y += 20) for (let x = 120; x < 270; x += 30) if (document.elementFromPoint(x, y) === c) return { x, y }; return null; })()`);
+    expect.ok(sky, 'some open sky to pinch on');
+    const dist = () => page.eval(`(() => { const st = window.__wyrmStage, k = document.querySelector('#app .stage canvas').__wyrmCtl; const c = st.camera.position; return Math.hypot(c.x, c.y, c.z); })()`);
+    const pinchTo = async (from, to) => {
+      const pts = (g) => [{ x: sky.x - g / 2, y: sky.y, id: 1 }, { x: sky.x + g / 2, y: sky.y, id: 2 }];
+      await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(from) });
+      for (let i = 1; i <= 8; i++) await page.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(from + (to - from) * i / 8) });
+      await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await sleep(2200);
+    };
+    const sel0 = await page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().selected`);
+    const d0 = await dist();
+    await pinchTo(60, 200);
+    const d1 = await dist();
+    expect.ok(d1 < d0 * 0.8, `spreading two fingers zooms in (camera ${d0.toFixed(1)} → ${d1.toFixed(1)})`);
+    await pinchTo(200, 60);
+    const d2 = await dist();
+    expect.ok(d2 > d1 * 1.25, `pinching two fingers zooms out (camera ${d1.toFixed(1)} → ${d2.toFixed(1)})`);
+    const st = await stage(page); expect.ok(st.finite, 'camera finite after pinching');
+    expect.eq(await page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().selected`), sel0, 'a pinch does not pick or drop a beast');
+    // a single tap still picks: aim at a unit in the open sky
+    const hit = await page.eval(`(() => { const c = document.querySelector('#app .stage canvas'), k = c.__wyrmCtl, cam = window.__wyrmStage.camera, r = c.getBoundingClientRect(); for (const id of k.census().units) { const w = k.where(id); const m = cam.matrixWorldInverse.elements, p = cam.projectionMatrix.elements; const x = m[0]*w[0]+m[4]*(w[1]+1.5)+m[8]*w[2]+m[12], y = m[1]*w[0]+m[5]*(w[1]+1.5)+m[9]*w[2]+m[13], z = m[2]*w[0]+m[6]*(w[1]+1.5)+m[10]*w[2]+m[14]; const cw = -z; if (cw <= 0) continue; const sx = r.left + ((p[0]*x+p[8]*z)/cw + 1) / 2 * r.width, sy = r.top + (1 - (p[5]*y+p[9]*z)/cw) / 2 * r.height; if (document.elementFromPoint(sx, sy) === c) return { sx, sy }; } return null; })()`);
+    if (!hit) { c.warn('no beast in the open sky to tap after zooming'); return; }
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: hit.sx, y: hit.sy, id: 3 }] });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(600);
+    expect.ok(await page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().selected`), 'a single tap still picks a beast');
+    await page.screenshot(c.evidencePath('after-pinch.png'));
+    expect.noErrors(page.errors(ALLOW), 'console');
+  });
   await page.close();
 }

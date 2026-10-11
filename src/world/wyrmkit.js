@@ -113,8 +113,19 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     // each scene opens a little further out, higher and turned, and settles in slowly
     var intro = o.intro !== false && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     if (intro) { cur.dist *= 1.7; cur.el = Math.min(1.2, cur.el + 0.28); cur.az -= 0.45; }
-    function down(e) { drag = true; px = e.clientX; py = e.clientY; moved = 0; try { canvas.setPointerCapture(e.pointerId); } catch (x) { } }
+    // one finger (or the mouse) turns the view; two fingers pinch to zoom; a tap picks
+    var pts = new Map(), pinch = null, pinched = false;
+    var span = function () { var a = Array.from(pts.values()); return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1; };
+    function down(e) {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { canvas.setPointerCapture(e.pointerId); } catch (x) { }
+      if (pts.size === 1) { drag = true; pinched = false; px = e.clientX; py = e.clientY; moved = 0; }
+      else if (pts.size === 2) { pinch = { span: span(), dist: goal.dist }; pinched = true; idle = 0; }
+    }
     function move(e) {
+      var p = pts.get(e.pointerId); if (!p) return;
+      p.x = e.clientX; p.y = e.clientY;
+      if (pinch && pts.size >= 2) { goal.dist = clamp(pinch.dist * pinch.span / span(), o.min || 10, o.max || 200); idle = 0; return; }
       if (!drag) return;
       var dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
       moved += Math.abs(dx) + Math.abs(dy);
@@ -122,8 +133,14 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       idle = 0;
     }
     function up(e) {
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      if (pts.size >= 2) { pinch = { span: span(), dist: goal.dist }; return; }
+      pinch = null;
+      // one finger stays after a pinch: it carries on turning from where it is, without a jump
+      if (pts.size === 1) { var r0 = pts.values().next().value; px = r0.x; py = r0.y; return; }
       drag = false;
-      if (moved < 6 && o.onTap) {
+      if (e.type === 'pointerup' && !pinched && moved < 6 && o.onTap) {
         var r = canvas.getBoundingClientRect();
         o.onTap(new T.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1));
       }
@@ -132,6 +149,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
     canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', wheel, { passive: false });
     canvas.style.touchAction = 'none';
     stage.add(function (t, dt) {
@@ -148,7 +166,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       goal: goal,
       // a target that is not a number would carry the camera off into nothing for good: refuse it
       to: function (target, dist, el, az) { if (target && isFinite(target.x) && isFinite(target.y) && isFinite(target.z)) goal.target.copy(target); else if (target) console.error('[wyrmhold] the camera was asked to look at nowhere', target); if (dist && isFinite(dist)) goal.dist = dist; if (el != null && isFinite(el)) goal.el = el; if (az != null && isFinite(az)) goal.az = az; idle = 0; },
-      dispose: function () { canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('wheel', wheel); }
+      dispose: function () { canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', up); canvas.removeEventListener('wheel', wheel); }
     };
   }
   K.Orbit = Orbit;
