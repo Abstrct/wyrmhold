@@ -250,14 +250,10 @@ export default async function (t, ctx) {
 
   await t.test('a signer tab that has not yet heard the soulstone change still never seals with the old key', 'S0', async () => {
     try {
-      // make tab A the signer again: tab B steps away (its lock goes with its page) and comes back behind A.
-      // about:blank, not the game's own blank page: goto() would take a same-origin page for the game and race its load
-      await pageB.goto('about:blank');
-      await page.waitFor(LEAD, { what: 'tab A to sign', timeout: 120000 });
-      await pageB.goto(ctx.app.url + '#/grimoire');
-      await pageB.waitFor(lifted, { what: 'tab B to boot', timeout: 60000 });
-      await pageB.waitFor(`${W}.unlocked`, { what: 'tab B to open the soulstone', timeout: 60000 });
-      await awake(pageB);
+      // make tab A the signer again: tab B gives the role up and gets back in line behind A (Web Locks keep order)
+      await pageB.eval(`const { leader } = await import('/src/core/leader.ts'); leader.resign(); leader.want(); return true`);
+      await page.waitFor(LEAD, { what: 'tab A to sign', timeout: 60000 });
+      expect.ok(!(await pageB.eval(LEAD)) && await pageB.eval(`${W}.unlocked`), 'tab B holds the soulstone too, and waits behind A');
       // storage events can lag another tab's write: tab A hears nothing more
       await page.eval(`window.__deaf = (e) => e.stopImmediatePropagation(); window.addEventListener('storage', window.__deaf, true); return true`);
       const third = await pageB.eval(`${W}.forget(); await ${W}.createInstant(); await ${W}.resolvePlayers(); return ${W}.active.address`);
