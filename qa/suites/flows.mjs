@@ -4,6 +4,21 @@ import { expect } from '../lib/report.mjs';
 import { openGame, awake, go, visibleText, stage, ALLOW, sleep } from '../lib/game.mjs';
 import { addStruct, ST } from '../lib/world.mjs';
 
+/** What the Hold shows of a warden: the beasts on the isle (with their name tags, the chosen one and the ward)
+ * and the Chronicle's lines (0 while it is hidden). */
+const holdShows = (p) => p.eval(`(() => {
+  const s = document.querySelector('#app .stage canvas').__wyrmCtl.census(), ch = document.querySelector('#app section[aria-label=Chronicle]');
+  return { units: s.units.length, tags: s.tags, selected: s.selected, ward: s.ward, chronicle: ch && !ch.hidden ? ch.querySelectorAll('li').length : 0 };
+})()`);
+/** A forgotten warden leaves nothing behind in the Hold: the isle is a stranger's, as one mounts it. */
+function expectEmptied(s, when) {
+  expect.eq(s.units, 0, `${when}: no beasts left on the isle`, s);
+  expect.eq(s.tags, 0, `${when}: no name tags left over the isle`, s);
+  expect.eq(s.selected, null, `${when}: nothing chosen`, s);
+  expect.eq(s.ward, 0, `${when}: the ward is down`, s);
+  expect.eq(s.chronicle, 0, `${when}: the Chronicle tells none of the forgotten warden’s rites`, s);
+}
+
 export default async function (t, ctx) {
   const page = await ctx.newPage();
   const w = ctx.sky.w;
@@ -149,13 +164,18 @@ export default async function (t, ctx) {
     expect.ok(!/Msg|Build|Initiate|tx|struct/.test(text), 'engine words in the chronicle', text.match(/Msg\w+|Initiate|struct/g));
   });
 
-  await t.test('forgetting the soulstone empties the Hold honestly and returns the stranger’s rites', 'S1', async () => {
+  await t.test('forgetting the soulstone empties the Hold honestly and returns the stranger’s rites', 'S1', async (c) => {
+    const before = await holdShows(page);
+    expect.ok(before.units > 0 && before.chronicle > 0 && before.ward > 0, 'before: the warden’s beasts, ward and rites are shown', before);
     await page.eval(`const { wallet } = await import('/src/wallet/wallet.ts'); wallet.forget(); return true`);
     await sleep(1500);
     const text = await visibleText(page);
     expect.ok(/No warden is bound|Swear the oath/.test(text), 'the Hold says there is no warden', text.slice(0, 300));
     const rites = await page.eval(`[...document.querySelectorAll('nav.rites .rite')].map((r) => r.querySelector('b').textContent)`);
     expect.ok(rites.includes('Swear the oath'), 'the oath is offered again', rites);
+    // the isle is a stranger's again at once, not at the next reload (a persona playtest, 2026-10-13)
+    expectEmptied(await holdShows(page), 'after forgetting');
+    await page.screenshot(c.evidencePath('forgotten.png'));
     expect.noErrors(page.errors(ALLOW), 'console');
   });
   await page.close();

@@ -624,7 +624,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       has: function (id) { return !!units[id]; },
       /** For the proving ground: where a unit stands, and what the scene holds. */
       where: function (id) { return units[id] ? worldPos(units[id]).toArray() : null; },
-      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected }; },
+      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected, ward: dome.mat.uniforms.power.value }; },
       add: function (u, quiet) {
         var info = placeUnit(u);
         if (quiet) return u.id;

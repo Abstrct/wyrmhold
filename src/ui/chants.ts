@@ -87,5 +87,6 @@ export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max =
   const off = txq.onChange(paint);
   // "just now" ages: refresh the times twice a minute
   const tick = setInterval(() => paint(last), 30_000);
-  return { el, dispose: () => { off(); clearInterval(tick); } };
+  // repaint: the filter's answer changed without the queue changing (whose rites these are)
+  return { el, repaint: () => paint(last), dispose: () => { off(); clearInterval(tick); } };
 }
