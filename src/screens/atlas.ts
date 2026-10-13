@@ -11,8 +11,10 @@ import { guilds, type GuildEntry } from '../guild/directory';
 import { empire } from '../game/empire';
 import { act } from '../game/actions';
 import { wallet } from '../wallet/wallet';
-import { covenColor, covenName, retellError, bellsAsTime } from '../lore';
+import { covenColor, covenName, retellError, bellsAsTime, beastName } from '../lore';
 import { markPath } from '../ui/guide';
+import { hearts } from '../ui/frame';
+import { alive, guardsOf, inRealm, reach, wyrmOf } from '../game/war';
 
 export function atlas(ctx: Ctx): Screen {
   const canvas = h('canvas');
@@ -49,6 +51,43 @@ export function atlas(ctx: Ctx): Screen {
 
   const name = (id: string) => covenName(id, meta.get(id)?.meta?.name);
 
+  /** The warden being scouted: read from the ledger while their isle is chosen, so the card can say how their hold stands. */
+  let scouted: string | null = null;
+  function scout(id: string | null) {
+    if (id === scouted) return;
+    if (scouted) empire.unwatch(scouted);
+    scouted = id;
+    if (id) empire.watch(id);
+  }
+  const offScout = empire.onChange(() => { if (scouted && sel >= 0 && all[sel]?.id === scouted) paint(); });
+
+  const andList = (xs: string[]) => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs[0] || '');
+  /** How their hold stands before you ride: their Wyrm, its guards, who rides at home, and which of yours can reach it. */
+  function scoutBlock(pid: string) {
+    const f = empire.players.get(pid), me = empire.commander;
+    if (!f) return h('div', { class: 'scout' }, h('p', { class: 'faint', style: { margin: 0, fontSize: '13px' } }, 'Scrying their hold…'));
+    const w = wyrmOf(f), home = f.fleet?.status !== 'away';
+    const guards = w ? guardsOf(w, f) : [];
+    const riders = [...f.structs.values()].filter((s) => alive(s) && s.type!.category === 'fleet' && s.typeId !== 1).length;
+    const state = !w || !alive(w) ? 'fallen' : !home ? 'abroad' : !w.online ? 'slumbering' : 'home';
+    const verdict = state === 'fallen' ? 'Their Elder Wyrm has fallen: their ward is open. The plunder can land as soon as you hold their sky.'
+      : state === 'abroad' ? 'Their warband is abroad with their Wyrm: their ward is open, and nothing at home can strike you.'
+      : state === 'slumbering' ? 'Their Elder Wyrm slumbers: their ward is open while it sleeps.'
+      : guards.length ? `To win: fell their ${andList(guards.map((g) => beastName(g.typeId)))}, then their Elder Wyrm.`
+      : 'To win: fell their Elder Wyrm. Nothing guards it.';
+    // which of our beasts could strike their Wyrm where it hangs
+    const mine = me ? [...me.structs.values()].filter((s) => alive(s) && s.online && s.type!.category === 'fleet') : [];
+    const reachers = w && alive(w) && home ? mine.filter((a) => reach(a, w).weapon) : [];
+    const soar = w && alive(w) && home && !reachers.length ? mine.find((a) => reach(a, w).soar) : undefined;
+    return h('div', { class: 'scout', role: 'group', 'aria-label': 'Scouting' },
+      h('p', { class: 'scout-k' }, 'Scouting'),
+      w && alive(w) ? h('p', { class: 'scout-row' }, h('span', null, 'Their Elder Wyrm'), h('span', { class: 'hearts', role: 'img', 'aria-label': `vigor ${w.health} of ${w.type!.maxHealth}` }, hearts(w.health, w.type!.maxHealth)), h('span', { class: 'faint' }, state === 'home' ? `at home, in ${inRealm(w.ambit)}` : state)) : null,
+      guards.length ? h('p', { class: 'scout-row' }, h('span', null, 'Guarded by'), h('span', { style: { color: '#ddd0ff' } }, guards.map((g) => beastName(g.typeId)).join(', '))) : null,
+      home ? h('p', { class: 'scout-row' }, h('span', null, 'At home'), h('span', null, `${riders || 'no'} ${riders === 1 ? 'beast' : 'beasts'}${state === 'fallen' ? '' : ' besides the Wyrm'}`)) : null,
+      h('p', { class: 'scout-verdict' }, verdict),
+      me && w && alive(w) && home ? h('p', { class: 'scout-reach' }, reachers.length ? `Your ${andList(reachers.map((a) => beastName(a.typeId)))} can reach their Wyrm.` : soar ? `None of your beasts reach their Wyrm in ${inRealm(w.ambit)} yet; your Elder Wyrm can soar there.` : `None of your beasts can reach their Wyrm in ${inRealm(w.ambit)}.`) : null);
+  }
+
   function pick(i: number | null) {
     sel = i ?? -1; scene?.get()?.select(i); paint();
     // on a phone the chosen isle's card sits below the list: bring it up
@@ -81,6 +120,7 @@ export function atlas(ctx: Ctx): Screen {
     else foot.textContent = all.length ? `${shown.length} of ${all.length} wardens · newest on the ledger` : 'Reading the ledger…';
     clear(card);
     const w = all[sel];
+    scout(w && w.id !== empire.commander?.playerId ? w.id : null);
     if (w) {
       const me = empire.commander;
       const you = w.id === me?.playerId;
@@ -97,7 +137,7 @@ export function atlas(ctx: Ctx): Screen {
             h('div', null, h('dt', null, 'Isle'), h('dd', { class: 'mono' }, w.planetId)),
             h('div', null, h('dt', null, 'Coven'), h('dd', { class: 'mono' }, w.guildId || '—')),
             h('div', null, h('dt', null, 'Warband'), h('dd', { class: 'mono' }, w.fleetId || '—')))),
-        h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, you ? 'Your own isle, drifting where the old sky set it.' : 'Somewhere on that shard a warden sleeps, or schemes. To you it floats here, a ride from your hold.'),
+        you ? h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, 'Your own isle, drifting where the old sky set it.') : scoutBlock(w.id),
         // One road to a raid: the Skirmish walks it step by step (ride out, strike, plunder).
         you ? h('a', { class: 'btn gold block', href: '#/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
           : h('a', { class: 'btn ember block', href: `#/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
@@ -180,5 +220,5 @@ export function atlas(ctx: Ctx): Screen {
       scene.dispose(); scene = null; sel = -1; buildSky(was);
     } else paint();
   });
-  return { el, title: 'Sky Atlas', leave: () => { left = true; offMe(); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
+  return { el, title: 'Sky Atlas', leave: () => { left = true; offMe(); offScout(); scout(null); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
 }

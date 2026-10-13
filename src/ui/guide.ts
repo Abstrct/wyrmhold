@@ -96,10 +96,10 @@ const STEPS: Step[] = [
   { id: 'ride', title: 'Ride out', route: '#/atlas', glow: 'ride',
     say: 'While your warband is abroad your own hold stands unguarded, so be quick and be sure.',
     do: 'In the Sky Atlas, choose an isle, press Raid this hold, then Ride out.',
-    done: 'The wind is under you. Hold the sky over their isle and the plunder chant begins.', test: (p) => !!flags.ride || p?.fleet?.status === 'away' },
+    done: 'The wind is under you. Fell their Elder Wyrm, and your plunder chant breaks their ward.', test: (p) => !!flags.ride || p?.fleet?.status === 'away' },
   { id: 'strike', title: 'Strike', route: '#/skirmish', glow: 'unleash',
-    say: 'Read the odds before you swing. Whatever lives will answer.',
-    do: 'In Skirmish, choose a striker, then a mark in its reach, then press Unleash.',
+    say: 'Read the odds before you swing. Whatever lives will answer, and guards step in front of what they guard.',
+    do: 'In Skirmish the wisest blow is chosen for you. Read what it will do, then press Unleash.',
     done: 'Blood in the clouds. You are a warden now, truly.', test: () => !!flags.strike },
 ];
 

@@ -69,8 +69,11 @@ txq.onSettled((j) => {
   if (j.status === 'success' && j.msgs.some((m) => /StructBuildInitiate/.test(m.typeUrl))) {
     const beast = retell(j.label).replace(/^.*circle · /i, '').replace(/^The /, '') || 'beast';
     toast(`The circle is drawn for the ${beast}. Its summoning chant is being sung; watch it under Incantations.`, 'player', 5000);
-  } else if (j.status === 'success') toast(retell(j.label) + ' — done.', 'player', 2600);
+  } else if (j.status === 'success' && document.body.dataset.route === 'skirmish' && j.msgs.some((m) => /StructAttack$/.test(m.typeUrl))) return;   // the fray tells it, blow by blow
+  else if (j.status === 'success') toast(retell(j.label) + ' — done.', 'player', 2600);
   else if (j.status === 'failed' && takeClaim(j.id)) return;
+  // a refused plunder chant is kept and spoken again by the chant engine; "Again" would only repeat it
+  else if (j.status === 'failed' && j.source === 'pow' && j.msgs.some((m) => /PlanetRaidComplete$/.test(m.typeUrl))) return;
   else if (j.status === 'failed') toast(retell(j.label).replace(/ · chant of \d+$/, '') + ' failed: ' + retellError(j.error || 'the ledger refused'), 'enemy', 7000, { label: 'Again', run: () => txq.retry(j.id) });
 });
 

@@ -136,7 +136,12 @@ export class Ledger {
     if (path === '/cosmos/base/tendermint/v1beta1/node_info') return json(res, 200, { default_node_info: { network: w.chainId } });
     if (seg[0] === 'cosmos' && seg[1] === 'auth') { const addr = dec(seg[4]); const n = this.sequences.get(addr) || 0; return json(res, 200, { account: { '@type': '/cosmos.auth.v1beta1.BaseAccount', address: addr, account_number: '7', sequence: String(n) } }); }
     if (seg[0] === 'cosmos' && seg[1] === 'bank') return json(res, 200, { balances: [{ denom: 'ualpha', amount: '5000000' }] });
-    if (path === '/cosmos/tx/v1beta1/simulate') { if (w.refuse) return json(res, 400, { code: 3, message: w.refuse }); return json(res, 200, { gas_info: { gas_used: '120000' } }); }
+    if (path === '/cosmos/tx/v1beta1/simulate') {
+      if (w.refuse) return json(res, 400, { code: 3, message: w.refuse });
+      // a rig that plays the chain's part (the arena) may refuse a rite the way the chain would
+      if (this.onSimulate) { let raw = ''; try { raw = JSON.parse(body).tx_bytes || ''; } catch { /* ignore */ } const why = this.onSimulate(raw); if (why) return json(res, 400, { code: 2, message: why }); }
+      return json(res, 200, { gas_info: { gas_used: '120000' } });
+    }
     if (path === '/cosmos/tx/v1beta1/txs' && method === 'POST') {
       let raw = ''; try { raw = JSON.parse(body).tx_bytes || ''; } catch { /* ignore */ }
       const hash = createHash('sha256').update(Buffer.from(raw, 'base64')).digest('hex').toUpperCase();
@@ -144,11 +149,11 @@ export class Ledger {
       this.broadcasts = (this.broadcasts || 0) + 1;
       // the signer's sequence moves on; the client keeps its own and re-reads on a mismatch
       const signer = w.lastSigner; if (signer) this.sequences.set(signer, (this.sequences.get(signer) || 0) + 1);
-      if (this.onBroadcast) this.onBroadcast(hash);
+      if (this.onBroadcast) this.onBroadcast(hash, raw);
       return json(res, 200, { tx_response: { code: 0, codespace: '', raw_log: '[]', txhash: hash } });
     }
     const mt = /^\/cosmos\/tx\/v1beta1\/txs\/([0-9A-Fa-f]+)$/.exec(path);
-    if (mt) { const t = this.txs.get(mt[1].toUpperCase()); if (!t || !t.height) return json(res, 404, { code: 5, message: `tx not found: ${mt[1]}` }); return json(res, 200, { tx_response: { txhash: mt[1], height: String(t.height), code: 0, raw_log: '[]', gas_used: '110000', events: t.events || [] } }); }
+    if (mt) { const t = this.txs.get(mt[1].toUpperCase()); if (!t || !t.height) return json(res, 404, { code: 5, message: `tx not found: ${mt[1]}` }); return json(res, 200, { tx_response: { txhash: mt[1], height: String(t.height), code: t.code || 0, raw_log: t.log || '[]', gas_used: '110000', events: t.events || [] } }); }
     return notFound(res, path);
   }
 

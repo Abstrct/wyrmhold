@@ -34,6 +34,7 @@ export function chantsPanel() {
       const pct = Math.max(4, Math.min(100, (best / Math.max(1, need)) * 100));
       const wait = need > best ? pow.blocksUntil(t, best) : 0;
       const note = t.status === 'submitting' ? 'spoken to the ledger…'
+        : t.waits ? `waits: ${t.waits}. Fell it and the plunder lands`
         : best >= need ? 'ready'
           // by then the chant already sung is enough; a lucky one can land sooner
           : Number.isFinite(wait) && wait > 0 ? `done within ~${bellsAsTime(wait)}, sooner with luck` : t.status === 'hashing' ? 'chanting…' : 'waiting';

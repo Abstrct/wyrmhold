@@ -6,6 +6,8 @@ import { wallet } from '../wallet/wallet';
 import { toast, h } from '../core/dom';
 import { audio } from '../core/audio';
 import { playerName } from '../realm';
+import { BEASTS } from '../lore';
+import { typeOf } from '../data/catalogue';
 
 interface RaidDetail { fleetId?: string; planetId?: string; status?: string; seized_ore?: string; seizedOre?: string }
 interface TheftDetail { victimPlayerId?: string; thiefPlayerId?: string; amount?: string }
@@ -23,19 +25,55 @@ function mine() {
 /** An isle by its warden's name. */
 function isleOf(planetId?: string) { for (const p of empire.players.values()) if (planetId && p.planetId === planetId) return `${playerName(p)}’s isle`; return 'their isle'; }
 
-/** A great banner across the sky for the moments that matter. */
+/** A great banner across the sky for the moments that matter. Banners never stack: one that comes while
+ * another is up waits its turn, and cuts the one before it short (but never before it can be read). */
+const banners: [string, string, 'gold' | 'ember'][] = [];
+let showing: { el: HTMLElement; at: number; timer: number } | null = null;
 export function proclaim(title: string, line: string, tone: 'gold' | 'ember') {
+  banners.push([title, line, tone]);
+  if (!showing) nextBanner();
+  else { clearTimeout(showing.timer); const s = showing; s.timer = window.setTimeout(() => endBanner(s.el), Math.max(0, s.at + 2400 - Date.now())); }
+}
+function nextBanner() {
+  const b = banners.shift();
+  if (!b) { showing = null; return; }
+  const [title, line, tone] = b;
   const el = h('div', { class: `proclaim ${tone}`, role: 'status', 'aria-live': 'assertive' }, h('p', { class: 'proclaim-title' }, title), h('p', { class: 'proclaim-line' }, line));
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('on'));
-  setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 900); }, 5200);
+  showing = { el, at: Date.now(), timer: window.setTimeout(() => endBanner(el), banners.length ? 2400 : 5200) };
 }
-
+function endBanner(el: HTMLElement) {
+  el.classList.remove('on');
+  setTimeout(() => { el.remove(); nextBanner(); }, 700);
+}
 /** Screens that want to know when one of our raids lands (the Skirmish shows a won state). */
 const plunderL = new Set<(d: { planetId?: string; seized: number }) => void>();
 export function onPlunder(f: (d: { planetId?: string; seized: number }) => void) { plunderL.add(f); return () => { plunderL.delete(f); }; }
 
+/** Blows against your beasts while you are elsewhere: one herald at a time, with a way to the fight. */
+let lastStruck = 0;
+function struckElsewhere(events: ChainTxEvent[]) {
+  if (document.body.dataset.route === 'skirmish' || Date.now() - lastStruck < 15000) return;
+  const { ids } = mine();
+  for (const e of events) {
+    if (e.type !== 'EventAttack') continue;
+    const d = unwrap(e, 'eventAttackDetail') as { attackerPlayerId?: string; attackerStructType?: string; eventAttackShotDetail?: { targetPlayerId?: string; targetStructType?: string; targetDestroyed?: boolean; evaded?: boolean }[] };
+    const shot = (d?.eventAttackShotDetail || []).find((s) => s.targetPlayerId && ids.has(s.targetPlayerId));
+    if (!shot || !d.attackerPlayerId || ids.has(d.attackerPlayerId)) continue;
+    lastStruck = Date.now();
+    const foe = empire.players.get(d.attackerPlayerId);
+    const by = foe ? `${playerName(foe)}’s warband` : 'A raider';
+    const what = beastWord(shot.targetStructType);
+    toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => { location.hash = `#/skirmish/${d.attackerPlayerId}`; } });
+    return;
+  }
+}
+/** The ledger's name for a beast, said in the realm's tongue. */
+const beastWord = (ledgerType?: string) => { for (const [id, l] of Object.entries(BEASTS)) if (typeOf(Number(id))?.type === ledgerType) return l.name; return 'beast'; };
+
 export function watchOmens() {
+  live.onTx((tx) => struckElsewhere(tx.events));
   live.onTx((tx) => {
     const raid = tx.events.find((e) => e.type === 'EventRaid');
     if (!raid) return;

@@ -984,7 +984,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     cloudscape(st, { seed: 41, mid: 14, midR0: 90, midR1: 400, midY: 0, midYR: 26, extra: [{ x: 0, y: -30, z: -30, w: 80, h: 40, v: 3, a: 0.95, s: 0.15 }, { x: -6, y: -34, z: 34, w: 70, h: 34, v: 7, a: 0.95, s: 0.2 }] });
     motes(st, { count: 320, box: 110, h: 40, y: -6, color: 0xff9a5a, size: 5, i: 2.6 });
     var burst = Bursts(st);
-    var sides = { ours: { x: -26, isle: null }, theirs: { x: 26, isle: null } };
+    // on a wide screen the two isles stand closer, so neither hides under the side panels
+    var sep = canvas.clientWidth / Math.max(1, canvas.clientHeight) < 0.9 ? 26 : 21;
+    var sides = { ours: { x: -sep, isle: null }, theirs: { x: sep, isle: null } };
     var tags = unitTags(st, canvas);
     var units = {}, roots = [], abroadN = { ours: 0, theirs: 0 };
     ['ours', 'theirs'].forEach(function (side, si) {
@@ -1009,8 +1011,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         var spot;
         if (realm === 'wilds') { spot = I.surface(4 * face - (n % 3) * 2.2 * face, -5 + n * 3.4); spot.x += base; }
         else if (realm === 'deeps') { spot = new T.Vector3(base + I.lake.x + (n - 1) * 1.6, -0.9, I.lake.z + (n % 2) * 1.6); }
-        else if (realm === 'skies') { spot = new T.Vector3(base + 4 * face, 10 + (n % 2) * 2, -6 + n * 4.5); }
-        else { spot = new T.Vector3(base + 2 * face, 21 + (n % 2) * 2.5, -7 + n * 5); }
+        // the high realms hang low enough to stay in the open sky between the panels: the fight is there
+        else if (realm === 'skies') { spot = new T.Vector3(base + 4 * face, 7.5 + (n % 2) * 1.4, -6 + n * 4.5); }
+        else { spot = new T.Vector3(base + 2 * face, 12 + (n % 2) * 1.6, -7 + n * 5); }
         // abroad, the warband hangs in the air at the near edge of the other isle
         // only the warband rides (hallows stay rooted); each rider gets its own place in the air
         var roams = u.roams !== false, an = roams ? abroadN[side]++ : 0;
@@ -1030,21 +1033,59 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var unhover = hoverable(st, pick, function (id) { hovered = id; if (o.onHover) o.onHover(id); });
     st.add(function (t) {
       var hu = hovered && units[hovered];
-      tags.light([hovered, marks.a && marks.a.id, marks.t && marks.t.id]);
+      tags.light([hovered, marks.a && marks.a.id, marks.t && marks.t.id, marks.g && marks.g.id]);
       hoverRing.visible = !!hu;
       if (hu) { var hp = hu.holder.position; hoverRing.position.set(hp.x, hp.y + 0.1, hp.z); hoverRing.rotation.z = -t * 0.8; hoverRing.material.opacity = 0.45 + 0.15 * Math.sin(t * 4); }
     });
     // a tall phone screen cannot hold two isles side by side: look down the gulf instead, ours near and theirs beyond
     var tall = function () { return canvas.clientWidth / Math.max(1, canvas.clientHeight) < 0.9; };
-    var orbit = Orbit(st, { dist: tall() ? 118 : 84, el: tall() ? 0.34 : 0.2, az: tall() ? -1.2 : 0, target: new T.Vector3(0, 3, 0), min: 25, max: 170, onTap: function (ndc) { var id = pick(ndc); if (o.onPick) o.onPick(id); } });
+    // wide screens keep their sky between the war bar above and the strike below: look a little higher, so the
+    // beasts of Starfall and the Skies hang in that open band instead of behind the panels
+    var orbit = Orbit(st, { dist: tall() ? 118 : 84, el: tall() ? 0.34 : 0.2, az: tall() ? -1.2 : 0, target: new T.Vector3(0, tall() ? 3 : 7, 0), min: 25, max: 170, onTap: function (ndc) { var id = pick(ndc); if (o.onPick) o.onPick(id); } });
+    // a heavy blow shakes the eye a little (never under reduced motion)
+    var quake = 0, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    st.add(function (t, dt) {
+      if (quake <= 0) return;
+      var a = quake * 0.55;
+      st.camera.position.x += (Math.random() - 0.5) * a; st.camera.position.y += (Math.random() - 0.5) * a;
+      quake = Math.max(0, quake - dt * 2.4);
+    });
     var marks = {};
     function mark(key, color) {
       var d = runeDisc(2.4, color, 0.95, 2.4); d.visible = false; st.scene.add(d);
       var bm = new T.Mesh(new T.CylinderGeometry(0.4, 0.4, 24, 16, 1, true), G(new T.Color(color).getHex(), { t: true, o: 0.14, add: true, ds: true, i: 2 })); bm.visible = false; st.scene.add(bm);
       marks[key] = { d: d, bm: bm, id: null };
     }
-    mark('a', '#e8c872'); mark('t', '#ff7a4d');
+    mark('a', '#e8c872'); mark('t', '#ff7a4d'); mark('g', '#b49bff');
     var bolts = [], shocks = [];
+    // words that rise from a beast when a blow lands: "−2", "Turned aside", "Falls!"
+    var popBox = canvas.parentElement ? document.createElement('div') : null, pops = [], pv = new T.Vector3();
+    if (popBox) { popBox.className = 'sk-pops'; popBox.setAttribute('aria-hidden', 'true'); canvas.parentElement.appendChild(popBox); }
+    function pop(id, text, kind) {
+      var u = units[id]; if (!popBox || !u) return;
+      var el = document.createElement('span'); el.className = 'sk-pop ' + (kind || 'hit'); el.textContent = text;
+      popBox.appendChild(el);
+      // several words on one beast stack instead of overlapping
+      var stack = pops.filter(function (q) { return q.id === id && q.k < 0.5; }).length;
+      pops.push({ el: el, id: id, k: 0, dx: (Math.random() - 0.5) * 30, stack: stack, last: null });
+    }
+    function framePops(dt) {
+      if (!popBox || !pops.length) return;
+      var w = canvas.clientWidth, h = canvas.clientHeight;
+      // words never rise under the panel across the top of the sky (the screen says where its edge is)
+      var top = o.clearTop ? o.clearTop() : 0;
+      for (var i = pops.length - 1; i >= 0; i--) {
+        var q = pops[i]; q.k += dt / 1.9;
+        if (q.k >= 1) { q.el.remove(); pops.splice(i, 1); continue; }
+        var u = units[q.id];
+        if (u) { pv.copy(u.holder.position); pv.y += u.realm === 'wilds' ? 3.2 : 2.2; pv.project(st.camera); q.last = { x: (pv.x + 1) / 2 * w, y: (1 - pv.y) / 2 * h, off: pv.z > 1 }; }
+        if (!q.last || q.last.off) { q.el.style.opacity = '0'; continue; }
+        var rise = 18 + q.k * 46 + q.stack * 26, a = q.k < 0.12 ? q.k / 0.12 : q.k > 0.7 ? (1 - q.k) / 0.3 : 1, sc = q.k < 0.12 ? 0.6 + q.k / 0.12 * 0.55 : 1.15 - Math.min(0.15, (q.k - 0.12));
+        q.el.style.opacity = a.toFixed(2);
+        var y = Math.max(q.last.y - rise, top + 36 + q.stack * 28);
+        q.el.style.transform = 'translate(' + (q.last.x + q.dx * q.k).toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-100%) scale(' + sc.toFixed(3) + ')';
+      }
+    }
     // an impact: a ring of force that races outward and a flash that swells and dies
     var ringMat = new T.ShaderMaterial({
       transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, fog: false,
@@ -1059,6 +1100,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       shocks.push({ ring: ring, fl: fl, k: 0 });
     }
     st.add(function (t, dt) {
+      framePops(dt);
       for (var si = shocks.length - 1; si >= 0; si--) {
         var sh = shocks[si]; sh.k += dt / 0.7;
         if (sh.k >= 1) { st.scene.remove(sh.ring); st.scene.remove(sh.fl); sh.ring.geometry.dispose(); sh.ring.material.dispose(); shocks.splice(si, 1); continue; }
@@ -1152,14 +1194,21 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         burst(a, { color: color, count: 40, speed: 3 });
         bolts.push({ s: s, core: core, tp: tp, tg: tg, trail: trail, a: a, b: b, c: c, k: 0, dur: opt.dur || 0.9, color: color, miss: opt.miss, to: to, done: opt.done });
       },
-      fell: function (id) { if (units[id]) { units[id].dying = 0; tags.remove(id); burst(centerOf(id), { color: 0xff5a3a, count: 220, speed: 10, life: 2 }); } },
+      fell: function (id) { if (units[id] && units[id].dying == null) { units[id].dying = 0; tags.remove(id); burst(centerOf(id), { color: 0xff5a3a, count: 220, speed: 10, life: 2 }); } },
+      /** Words over a beast: kind is hit, miss, guard, back, fell or heal. */
+      pop: function (id, text, kind) { pop(id, text, kind); },
+      /** Shake a beast as a blow lands on it. */
+      jolt: function (id, k) { if (units[id]) units[id].hit = k || 1.2; },
+      /** Shake the eye: 0.5 for a heavy blow, 1 for a fall. */
+      shake: function (k) { if (!still) quake = Math.max(quake, k || 0.5); },
+      has: function (id) { return !!units[id] && units[id].dying == null; },
       view: function (which) {
-        if (which === 'ours') orbit.to(new T.Vector3(-26, 8, 0), 50, 0.25, -0.6);
-        else if (which === 'theirs') orbit.to(new T.Vector3(26, 8, 0), 50, 0.25, 0.6);
+        if (which === 'ours') orbit.to(new T.Vector3(-sep, 8, 0), 50, 0.25, -0.6);
+        else if (which === 'theirs') orbit.to(new T.Vector3(sep, 8, 0), 50, 0.25, 0.6);
         else if (tall()) orbit.to(new T.Vector3(0, 3, 0), 118, 0.34, -1.2);
-        else orbit.to(new T.Vector3(0, 3, 0), 84, 0.2, 0);
+        else orbit.to(new T.Vector3(0, 7, 0), 84, 0.2, 0);
       },
-      dispose: function () { unhover(); orbit.dispose(); tags.dispose(); st.dispose(); }
+      dispose: function () { unhover(); orbit.dispose(); tags.dispose(); if (popBox) popBox.remove(); st.dispose(); }
     };
     return ctl;
   };

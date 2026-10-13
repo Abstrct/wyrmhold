@@ -35,7 +35,7 @@ and which suite carries it.
 | **Art & asset validation** | Does every model load, measure, animate and render? | 22 procedural beasts and hallows plus Ysolde, each built from code at runtime. A NaN in one vertex sank the Ghoul Archer. Every body is built in a real WebGL context, scanned for non-finite coordinates at rest and after animation, measured against a size and triangle budget, then rendered on the dais with shader output watched for warnings. | `assets` |
 | **Game logic & data integrity** | Are the rules and the data the client ships correct and consistent? | The struct catalogue (22 types), the lore names, the realm↔ambit mapping the scenes use, the reach bitmasks, the action rules (`verbsFor`, `buildBlock`, `freeCircle`), unit placement (`unitsOf`), event routing, formatting, the chant difficulty clock, and `--net` drift against the public ledger. | `logic` |
 | **Smoke & stability** | Does every screen boot, draw and leave cleanly? | Eight entry points as a stranger and seven as a sworn warden: no thrown error, no console error, the sky's first frame drawn and not black, the camera finite, deep links honoured, and a walk of every road twice leaving no stray scene, canvas, tag box or dialog. | `smoke` |
-| **Feature / functional** | Does each screen do what it says? | The Hold (roster ↔ isle parity, selection, the card, filters, rites, Summon, Guard, omens, watching, crowds, unknown types), the Bestiary (22 runes), the Skirmish (both warbands, reach vs the catalogue, the stepper, riding out, Unleash as a real rite, defending), the Atlas, the Leyweave and the Grimoire. | `hold` `bestiary` `skirmish` `atlas` |
+| **Feature / functional** | Does each screen do what it says? | The Hold (roster ↔ isle parity, selection, the card, filters, rites, Summon, Guard, omens, watching, crowds, unknown types), the Bestiary (22 runes), the Skirmish (both warbands, reach vs the catalogue, the war bar, dodge odds as the ledger rolls them, guards named, riding out, Unleash and Fight on as real rites, the fray, the plunder chant waiting on their Wyrm, defending), the Atlas, the Leyweave and the Grimoire. | `hold` `bestiary` `skirmish` `atlas` |
 | **Player journeys (end to end)** | Can a new player get from nothing to playing? | A browser that has never seen the game: the prologue, the oath start to finish against a mock coven scribe, the first Hold with the tour and Ysolde's path, a summoning that queues, signs, broadcasts and appears on the isle, the Chronicle, and forgetting the soulstone. | `flows` |
 | **Clarity, text & localisation** | Does the player understand what they read? | Wyrmhold has a strict tongue: never a ledger id, never an engine word (struct, planet, fleet, wallet…), never `undefined`. Every screen's visible text is linted, every control must have a name, every meter must explain itself, the link state must speak plainly, help and glosses must open and close. | `clarity` |
 | **Accessibility & input** | Can a player who cannot see the sky, or use a mouse, still play? | Landmarks and names, the canvas hidden from assistive tech, Tab reaching nav, roster and rites, Enter picking a beast, modal dialogs that close on Escape and give focus back, polite heralds that never stack past three, reduced motion, a tap on the sky picking a beast, and two fingers pinching to zoom (in and out, never picking a beast). | `a11y` |
@@ -210,3 +210,29 @@ and the whole ground with `--net` nightly, uploading `qa/reports/ci` as an artif
 needs Chrome (`QA_CHROME=/path/to/chrome` if it is not in a standard place); GitHub's Ubuntu runners
 have it at `/usr/bin/google-chrome`. Under software WebGL a full run takes about 105 minutes, most of it
 shader compilation; the quick gate about 20.
+
+---
+
+## 6. The arena: a sky that fights back
+
+The proving ground's ledger accepts rites but never plays them. `qa/arena.mjs` plays the ledger's part
+for war, so a raid can be fought end to end on this computer: strikes, dodges (Glamour, Windslip), guards
+that strike back and take the blow, stone-skin, the mark's answer, the Thunder Spire, soaring, riding
+out (only on an awake Elder Wyrm), a raid broken by a fallen Wyrm, and plunder, refused while the
+defender's Wyrm stands. Each rite is told back as the same `EventAttack` / `EventRaid` /
+`EventOreTheft` the ledger emits, in the tx result and on the live feed. The order and odds follow
+`attack_context.go`; only the dice differ (`Math.random`, not the block hash).
+
+```bash
+node qa/arena.mjs                 # http://127.0.0.1:5194/#/skirmish/1-2 · Grimwald strikes back every 15 s
+node qa/arena.mjs --calm          # a foe who never strikes
+node qa/arena-shots.mjs OUT after # captures of the Skirmish (also: before, devices, fun)
+```
+
+Swear in the page's console as the arena's warden (any soulstone maps to them):
+`const { wallet } = await import('/src/wallet/wallet.ts'); await wallet.createInstant(); await wallet.resolvePlayers();`
+
+`.claude/launch.json` has `wyrmhold-arena` (5194) and `wyrmhold-arena-calm` (5195). The sky: Aldric
+(you) with an Elder Wyrm and one beast in each realm; Grimwald with a Comet Sprite guarding his Wyrm,
+a veiled Shade Owl, a Thunder Spire and six sheaves of wildroot. Don't edit `src/` while a QA run is
+going: Vite hot-reloads the pages under test, and checks fail that would otherwise pass.

@@ -71,16 +71,21 @@ export function codex(ctx: Ctx): Screen {
   // The laws of war, with the odds the realm actually keeps.
   const g = typeOf(5)!, w = typeOf(7)!, tr = typeOf(9)!, bh = typeOf(2)!, sr = typeOf(12)!;
   const R = (t: typeof g) => t as unknown as Record<string, number>;
+  const turned = (n: number, d: number) => `${n} in ${d}`;
   const LAWS: [string, string][] = [
-    ['Seeking and flung blows', 'Every strike is one or the other. Some beasts slip one kind, never both.'],
-    ['Glamour', `Harpy, Void Behemoth, Kraken. Of seeking blows aimed at them, ${R(g).guidedDefensiveSuccessRateNumerator} in ${R(g).guidedDefensiveSuccessRateDenominator} land; the rest fly wide.`],
-    ['Windslip', `The Storm Gryphon. Of flung blows aimed at it, ${R(w).unguidedDefensiveSuccessRateNumerator} in ${R(w).unguidedDefensiveSuccessRateDenominator} land.`],
+    ['How a raid is won', 'Ride out to their isle. While their Elder Wyrm stands at home, their ward holds and no plunder can land: fell it, and your chant breaks in and carries off their unbrewed wildroot.'],
+    ['How a blow falls', 'In this order: their guards strike back at the striker; a guard in the mark’s own realm steps in and takes the blow; the mark, if it lives, strikes back; a Thunder Spire lashes anyone who strikes its isle’s hallows.'],
+    ['Breath', 'Every blow needs breath, and striking spends it all. The Skirmish shows how much a blow needs and strikes the moment you have it.'],
+    ['Seeking and flung blows', 'Every strike is one or the other. Some beasts slip one kind, never both: strike them with the other.'],
+    ['Glamour', `Harpy, Void Behemoth, Kraken. ${turned(R(g).guidedDefensiveSuccessRateNumerator, R(g).guidedDefensiveSuccessRateDenominator)} seeking blows aimed at them fly wide. Flung blows always land.`],
+    ['Windslip', `The Storm Gryphon. ${turned(R(w).unguidedDefensiveSuccessRateNumerator, R(w).unguidedDefensiveSuccessRateDenominator)} flung blows aimed at it fly wide. Seeking blows always land.`],
     ['Stone-skin', `The Stone Troll and the great springs. Every blow is softened by ${tr.attackReduction}.`],
     ['The song cracks stone', `The Void Behemoth’s ${bh.primaryWeaponArmourPiercing ? 'low song' : 'blow'} ignores stone-skin.`],
     ['Veil', 'A veiled beast can only be marked by beasts of its own realm. Striking drops the veil.'],
     ['Rootbound', 'Whatever the Siege Treant strikes cannot answer it.'],
     ['Answer', `A struck beast that lives strikes back. The Siren answers ${sr.counterAttackSameAmbit} in its own waters.`],
-    ['Guard', 'A guard steps in front of blows aimed at its ward, when it can reach the striker.'],
+    ['Guard', 'A guard strikes back at whoever strikes its ward, if it can reach them, and takes the blow itself when it stands in the ward’s own realm. Fell the guard first.'],
+    ['The Elder Wyrm', 'It strikes only in its own realm and must soar to reach another. Every raid rides on it: if a raider’s Wyrm falls, the raid breaks and the warband flees home.'],
     ['Plunder', 'Takes unbrewed wildroot, never alpha, never a soulstone. Fell the raider’s Elder Wyrm and the plunder breaks.'],
   ];
   const wyrmCanvas = h('canvas', { class: 'codex-wyrm', width: 300, height: 300, 'aria-hidden': 'true' }) as HTMLCanvasElement;
