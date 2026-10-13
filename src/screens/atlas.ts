@@ -1,6 +1,6 @@
 /* The Sky Atlas: the newest wardens on the ledger, each isle a real planet, drawn around its
  * coven's wellspring. Ride out signs a real MsgFleetMove. */
-import { h, clear, toast } from '../core/dom';
+import { h, clear, toast, keepFocus } from '../core/dom';
 import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar, icon, ICON } from '../ui/frame';
@@ -94,62 +94,104 @@ export function atlas(ctx: Ctx): Screen {
     if (i != null && matchMedia('(max-width: 720px)').matches) requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
-  function paint() {
+  // the panels rebuild as the ledger moves (the scouted warden is read again and again):
+  // each section repaints only when what it says has changed, and keyboard focus survives it
+  const sigs: Record<string, string> = {};
+  /** One section repaints only when what it says has changed. */
+  const changed = (k: string, sig: string) => { if (sigs[k] === sig) return false; sigs[k] = sig; return true; };
+  /** Which wardens' "Ledger marks" were left open, so a rebuilt card keeps them open. */
+  const marksOpen = new Set<string>();
+  let facts: HTMLElement | null = null, scoutBox: HTMLElement | null = null, cardFor: string | null = null;
+
+  function paint() { keepFocus(el, paintNow); }
+  function paintNow() {
     const q = search.value.trim().toLowerCase();
-    clear(chips);
-    chips.append(h('button', { type: 'button', class: 'chip' + (richOnly ? ' on' : ''), 'aria-pressed': String(richOnly), 'data-tut': 'rich', onclick: () => { richOnly = !richOnly; if (richOnly) markPath('atlas'); paint(); } },
-      h('span', { class: 'gem', style: { background: 'var(--root)', width: '8px', height: '8px' } }), 'Unbrewed wildroot', h('span', { class: 'n' }, String(all.filter((w) => oreOf(w) > 0 && w.id !== empire.commander?.playerId).length))));
-    for (const c of covens) chips.append(h('button', { type: 'button', class: 'chip' + (coven === c ? ' on' : ''), 'aria-pressed': String(coven === c), onclick: () => { coven = coven === c ? null : c; paint(); } },
-      h('span', { class: 'gem', style: { background: covenColor(c), width: '8px', height: '8px' } }), name(c)));
-    clear(list);
-    let shown = all.map((w, i) => ({ w, i })).filter(({ w }) => (!coven || w.guildId === coven) && (!richOnly || (oreOf(w) > 0 && w.id !== empire.commander?.playerId)) && (!q || wardenName(w).toLowerCase().includes(q) || w.id.includes(q) || w.planetId.includes(q)));
+    const meId = empire.commander?.playerId;
+    const rich = all.filter((w) => oreOf(w) > 0 && w.id !== meId).length;
+    if (changed('chips', JSON.stringify([richOnly, coven, rich, covens.map((c) => [c, name(c)])]))) {
+      clear(chips);
+      chips.append(h('button', { type: 'button', class: 'chip' + (richOnly ? ' on' : ''), 'aria-pressed': String(richOnly), 'data-tut': 'rich', 'data-key': 'rich', onclick: () => { richOnly = !richOnly; if (richOnly) markPath('atlas'); paint(); } },
+        h('span', { class: 'gem', style: { background: 'var(--root)', width: '8px', height: '8px' } }), 'Unbrewed wildroot', h('span', { class: 'n' }, String(rich))));
+      for (const c of covens) chips.append(h('button', { type: 'button', class: 'chip' + (coven === c ? ' on' : ''), 'aria-pressed': String(coven === c), 'data-key': 'coven:' + c, onclick: () => { coven = coven === c ? null : c; paint(); } },
+        h('span', { class: 'gem', style: { background: covenColor(c), width: '8px', height: '8px' } }), name(c)));
+    }
+    let shown = all.map((w, i) => ({ w, i })).filter(({ w }) => (!coven || w.guildId === coven) && (!richOnly || (oreOf(w) > 0 && w.id !== meId)) && (!q || wardenName(w).toLowerCase().includes(q) || w.id.includes(q) || w.planetId.includes(q)));
     if (richOnly) shown = shown.sort((a, b) => oreOf(b.w) - oreOf(a.w));
     // your own hold always leads the list, so home is never lost among hundreds
-    else { const me = empire.commander?.playerId; const k = shown.findIndex(({ w }) => w.id === me); if (k > 0) shown.unshift(...shown.splice(k, 1)); }
-    for (const { w, i } of shown.slice(0, 300)) {
-      const you = w.id === empire.commander?.playerId;
-      list.append(h('li', null, h('button', { type: 'button', class: 'item' + (sel === i ? ' on' : ''), style: { minHeight: '46px' }, onclick: () => pick(i) },
-        h('span', { class: 'l' }, h('span', { class: 'gem', style: { background: you ? '#fff1c4' : covenColor(w.guildId), boxShadow: `0 0 8px ${covenColor(w.guildId)}` } }), h('span', { class: 'nm', style: { fontSize: '15px' } }, you ? 'Your Hold' : wardenName(w))),
-        oreOf(w) > 0 && !you ? h('span', { style: { fontSize: '12.5px', color: 'var(--root)' } }, `${oreOf(w)} wildroot`)
-          : you ? ''
-            : sleptFor(w) > 600 ? h('span', { class: 'faint', style: { fontSize: '12.5px' }, title: 'Not stirred for a long while: unlikely to defend' }, 'asleep') : ''),
-      ));
+    else { const k = shown.findIndex(({ w }) => w.id === meId); if (k > 0) shown.unshift(...shown.splice(k, 1)); }
+    const rows = shown.slice(0, 300);
+    if (changed('list', JSON.stringify([meId, rows.map(({ w, i }) => [i, oreOf(w), sleptFor(w) > 600])]))) {
+      clear(list);
+      for (const { w, i } of rows) {
+        const you = w.id === meId;
+        list.append(h('li', null, h('button', { type: 'button', class: 'item', 'data-key': w.id, style: { minHeight: '46px' }, onclick: () => pick(i) },
+          h('span', { class: 'l' }, h('span', { class: 'gem', style: { background: you ? '#fff1c4' : covenColor(w.guildId), boxShadow: `0 0 8px ${covenColor(w.guildId)}` } }), h('span', { class: 'nm', style: { fontSize: '15px' } }, you ? 'Your Hold' : wardenName(w))),
+          oreOf(w) > 0 && !you ? h('span', { style: { fontSize: '12.5px', color: 'var(--root)' } }, `${oreOf(w)} wildroot`)
+            : you ? ''
+              : sleptFor(w) > 600 ? h('span', { class: 'faint', style: { fontSize: '12.5px' }, title: 'Not stirred for a long while: unlikely to defend' }, 'asleep') : ''),
+        ));
+      }
     }
-    // the sky could not be read: say so plainly (and keep saying it), with a way to ask again
-    if (failed && !all.length) { clear(foot); foot.append('The ledger is not answering just now. ', h('button', { type: 'button', class: 'linkish', onclick: () => again() }, 'Try again')); }
-    else foot.textContent = all.length ? `${shown.length} of ${all.length} wardens · newest on the ledger` : 'Reading the ledger…';
-    clear(card);
+    // the chosen one is lit in place: choosing does not rebuild hundreds of rows
     const w = all[sel];
-    scout(w && w.id !== empire.commander?.playerId ? w.id : null);
-    if (w) {
-      const me = empire.commander;
-      const you = w.id === me?.playerId;
-      card.append(h('section', { class: 'glass panel rise', 'aria-label': 'Chosen isle', style: { flex: '0 1 360px', minWidth: '280px', padding: '20px' } },
-        h('p', { class: 'eyebrow row', style: { color: covenColor(w.guildId), gap: '8px' } }, h('span', { class: 'gem', style: { background: covenColor(w.guildId), width: '8px', height: '8px' } }), name(w.guildId)),
-        h('h1', { class: 'display', style: { fontSize: '36px', marginTop: '6px', overflowWrap: 'anywhere' } }, you ? 'Your Hold' : wardenName(w)),
-        h('dl', { class: 'facts' },
-          h('div', null, h('dt', null, 'Coven'), h('dd', null, w.guildId ? name(w.guildId) : 'none')),
-          you ? null : h('div', null, h('dt', null, 'Last stirred'), h('dd', null, sleptFor(w) ? (sleptFor(w) > 14400 ? 'long asleep: unlikely to defend' : `${bellsAsTime(sleptFor(w))} ago`) : '—')),
-          h('div', { style: { gridColumn: 'span 2' } }, h('dt', null, you ? 'Unbrewed wildroot (raiders could take it)' : 'Wildroot to plunder'), h('dd', { style: { color: oreOf(w) > 0 ? 'var(--root)' : undefined } }, oreOf(w) > 0 ? `${oreOf(w)} ${oreOf(w) === 1 ? 'sheaf' : 'sheaves'}` : 'none — nothing to take'))),
-        h('details', { class: 'more' }, h('summary', null, 'Ledger marks'),
-          h('dl', { class: 'facts' },
-            h('div', null, h('dt', null, 'Warden'), h('dd', { class: 'mono' }, w.id)),
-            h('div', null, h('dt', null, 'Isle'), h('dd', { class: 'mono' }, w.planetId)),
-            h('div', null, h('dt', null, 'Coven'), h('dd', { class: 'mono' }, w.guildId || '—')),
-            h('div', null, h('dt', null, 'Warband'), h('dd', { class: 'mono' }, w.fleetId || '—')))),
-        you ? h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, 'Your own isle, drifting where the old sky set it.') : scoutBlock(w.id),
-        // One road to a raid: the Skirmish walks it step by step (ride out, strike, plunder).
-        you ? h('a', { class: 'btn gold block', href: '#/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
-          : h('a', { class: 'btn ember block', href: `#/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
-        // a raid on an empty hold only breaks things: say so before the ride
-        !you && sightOk && oreOf(w) === 0 ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Nothing unbrewed to plunder there right now. Amber isles hold a prize.') : '',
-        you ? '' : h('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } },
-          h('a', { class: 'btn small', href: `#/hold/${w.id}`, style: { flex: '1' } }, 'Scry their isle'),
-          h('button', { type: 'button', class: 'btn small', style: { flex: '1' }, onclick: () => rideOut(w) }, 'Just ride there')),
-        h('button', { type: 'button', class: 'btn ghost block', style: { marginTop: '10px' }, onclick: () => pick(null) }, 'Back to the whole sky')));
+    for (const b of list.querySelectorAll<HTMLElement>('.item')) b.classList.toggle('on', !!w && b.dataset.key === w.id);
+    // the sky could not be read: say so plainly (and keep saying it), with a way to ask again
+    const down = failed && !all.length;
+    const count = all.length ? `${shown.length} of ${all.length} wardens · newest on the ledger` : 'Reading the ledger…';
+    if (changed('foot', down ? 'down' : count)) {
+      if (down) { clear(foot); foot.append('The ledger is not answering just now. ', h('button', { type: 'button', class: 'linkish', onclick: () => again() }, 'Try again')); }
+      else foot.textContent = count;
     }
-    clear(legend);
-    for (const c of covens) legend.append(h('span', { class: 'row', style: { gap: '6px' } }, h('span', { class: 'gem', style: { background: covenColor(c) } }), name(c)));
+    scout(w && w.id !== meId ? w.id : null);
+    paintCard(w, meId);
+    if (changed('legend', JSON.stringify(covens.map((c) => [c, name(c)])))) {
+      clear(legend);
+      for (const c of covens) legend.append(h('span', { class: 'row', style: { gap: '6px' } }, h('span', { class: 'gem', style: { background: covenColor(c) } }), name(c)));
+    }
+  }
+
+  /** The chosen isle's card. Built once per warden; only its facts and the scouting change as the ledger moves. */
+  function paintCard(w: Warden | undefined, meId: string | undefined) {
+    const you = !!w && w.id === meId;
+    if (changed('card', JSON.stringify(w ? [w.id, you, name(w.guildId), oreOf(w), sightOk] : null))) {
+      clear(card); facts = scoutBox = null; delete sigs.facts; delete sigs.scout;
+      if (w) {
+        // it rises when a warden is chosen, not every time it is built again
+        const fresh = w.id !== cardFor;
+        facts = h('div');
+        scoutBox = you ? null : h('div');
+        card.append(h('section', { class: 'glass panel' + (fresh ? ' rise' : ''), 'aria-label': 'Chosen isle', style: { flex: '0 1 360px', minWidth: '280px', padding: '20px' } },
+          h('p', { class: 'eyebrow row', style: { color: covenColor(w.guildId), gap: '8px' } }, h('span', { class: 'gem', style: { background: covenColor(w.guildId), width: '8px', height: '8px' } }), name(w.guildId)),
+          h('h1', { class: 'display', style: { fontSize: '36px', marginTop: '6px', overflowWrap: 'anywhere' } }, you ? 'Your Hold' : wardenName(w)),
+          facts,
+          h('details', { class: 'more', open: marksOpen.has(w.id), ontoggle: (e: Event) => { if ((e.target as HTMLDetailsElement).open) marksOpen.add(w.id); else marksOpen.delete(w.id); } }, h('summary', { 'data-key': 'marks' }, 'Ledger marks'),
+            h('dl', { class: 'facts' },
+              h('div', null, h('dt', null, 'Warden'), h('dd', { class: 'mono' }, w.id)),
+              h('div', null, h('dt', null, 'Isle'), h('dd', { class: 'mono' }, w.planetId)),
+              h('div', null, h('dt', null, 'Coven'), h('dd', { class: 'mono' }, w.guildId || '—')),
+              h('div', null, h('dt', null, 'Warband'), h('dd', { class: 'mono' }, w.fleetId || '—')))),
+          you ? h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, 'Your own isle, drifting where the old sky set it.') : scoutBox,
+          // One road to a raid: the Skirmish walks it step by step (ride out, strike, plunder).
+          you ? h('a', { class: 'btn gold block', href: '#/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
+            : h('a', { class: 'btn ember block', href: `#/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
+          // a raid on an empty hold only breaks things: say so before the ride
+          !you && sightOk && oreOf(w) === 0 ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Nothing unbrewed to plunder there right now. Amber isles hold a prize.') : '',
+          you ? '' : h('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } },
+            h('a', { class: 'btn small', href: `#/hold/${w.id}`, style: { flex: '1' } }, 'Scry their isle'),
+            h('button', { type: 'button', class: 'btn small', style: { flex: '1' }, onclick: () => rideOut(w) }, 'Just ride there')),
+          h('button', { type: 'button', class: 'btn ghost block', style: { marginTop: '10px' }, onclick: () => pick(null) }, 'Back to the whole sky')));
+      }
+      cardFor = w?.id ?? null;
+    }
+    if (!w) return;
+    // how long they have slept moves with every bell: only those words change, not the card
+    const stirred = you ? '' : sleptFor(w) ? (sleptFor(w) > 14400 ? 'long asleep: unlikely to defend' : `${bellsAsTime(sleptFor(w))} ago`) : '—';
+    if (facts && changed('facts', stirred)) facts.replaceChildren(h('dl', { class: 'facts' },
+      h('div', null, h('dt', null, 'Coven'), h('dd', null, w.guildId ? name(w.guildId) : 'none')),
+      you ? null : h('div', null, h('dt', null, 'Last stirred'), h('dd', null, stirred)),
+      h('div', { style: { gridColumn: 'span 2' } }, h('dt', null, you ? 'Unbrewed wildroot (raiders could take it)' : 'Wildroot to plunder'), h('dd', { style: { color: oreOf(w) > 0 ? 'var(--root)' : undefined } }, oreOf(w) > 0 ? `${oreOf(w)} ${oreOf(w) === 1 ? 'sheaf' : 'sheaves'}` : 'none — nothing to take'))));
+    // the scouting is read again on every ledger change; it holds no controls, so its words are its signature
+    if (scoutBox) { const sb = scoutBlock(w.id); if (changed('scout', sb.outerHTML)) scoutBox.replaceChildren(sb); }
   }
 
   function rideOut(w: Warden) {
@@ -201,7 +243,8 @@ export function atlas(ctx: Ctx): Screen {
     }), (c) => { c.glowRich(all.map((w) => oreOf(w))); if (focus) { const i = all.findIndex((w) => w.id === focus); if (i >= 0) pick(i); } });
     paint();
   }
-  again = () => { clearTimeout(retry); foot.textContent = 'Asking the ledger again…'; void read(); };
+  // the foot is written here, outside paint: forget its signature so the next paint writes it again
+  again = () => { clearTimeout(retry); delete sigs.foot; foot.textContent = 'Asking the ledger again…'; void read(); };
   void read();
   paint();
   // when your own warden is read after the sky, the list learns which hold is yours (and pins it)
