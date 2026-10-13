@@ -465,9 +465,22 @@ export function hold(ctx: Ctx): Screen {
   window.addEventListener('resize', onResize);
 
   let toured = false;
+  /** Whose beasts stand on the isle and whose rites the Chronicle tells. */
+  let shownFor: string | null = null;
   function paint() {
     trackReading();
     const p = player();
+    // a warden gone (forgotten here or in another tab) or switched: the isle goes back to a stranger's, bare and
+    // unwarded, the choice is let go, and whoever comes next is set down quietly, as on a first look
+    if ((p?.playerId ?? null) !== shownFor) {
+      if (shownFor) {
+        sel = null; raiders = []; raidCheckAt = 0; first = true;
+        const isle = scene.get();
+        if (isle) { isle.sync([], true); isle.setWard(0); }
+      }
+      shownFor = p?.playerId ?? null;
+      chron.repaint();
+    }
     checkRaiders();
     keepFocus(el, () => { paintBanner(p); paintOmens(p); paintRoster(p); paintCard(p); paintRites(p); });
     // a warden's first time in their own Hold: a short look around, once the isle has woken
