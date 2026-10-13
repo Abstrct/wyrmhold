@@ -124,7 +124,8 @@ export default async function (t, ctx) {
     for (let i = 0; i < 10 && await page.eval(`document.body.classList.contains('touring')`); i++) { await page.eval(`(() => { const b = [...document.querySelectorAll('button')].filter((x) => x.offsetParent !== null).find((x) => /next|go on|done|got it|close|begin|finish/i.test(x.textContent)); if (b) b.click(); })()`); await sleep(500); }
     await page.waitFor(`document.querySelector('.path')`, { what: 'Ysolde', timeout: 10000 });
     const path = await page.eval(`document.querySelector('.path').innerText`);
-    expect.ok(/\d+\/12|STEP \d+ OF 12/i.test(path), 'the path counts its steps', path);
+    // the pill and the card both count the steps walked ("3/12", "3 of 12 walked")
+    expect.ok(/\d+\/12|\d+ OF 12/i.test(path), 'the path counts its steps', path);
     expect.ok(/Next:|Meet your Elder Wyrm|Summon|Root Delver/.test(path), 'the path names the next step', path);
     } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
   });
