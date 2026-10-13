@@ -7,6 +7,7 @@ import { wallet } from '../wallet/wallet';
 import { wardens, wardenName, playerName } from '../realm';
 import { empire } from '../game/empire';
 import { playPrologue, prologueSeen } from '../ui/prologue';
+import { sheaves } from '../lore';
 
 export function gate(ctx: Ctx): Screen {
   const canvas = h('canvas');
@@ -26,7 +27,7 @@ export function gate(ctx: Ctx): Screen {
     const head = p && sworn() ? `Welcome back, ${playerName(p)}.` : '';
     const wyrm = p && [...p.structs.values()].some((x) => x.typeId === 1 && !x.destroyed);
     const rest = !head ? '' : (!p!.planetId ? ' Seek your isle at your Hold.' : wyrm ? (p!.fleet?.status === 'away' ? ' Your Elder Wyrm rides abroad; your hold stands unguarded.' : ' Your Elder Wyrm keeps watch.') : ' Your Elder Wyrm has fallen: hatch a new one at your Hold.')
-      + (p!.ore > 0 ? ` ${p!.ore} ${p!.ore === 1 ? 'sheaf' : 'sheaves'} of wildroot wait in your stores.` : '');
+      + (p!.ore > 0 ? ` ${sheaves(p!.ore)} of wildroot ${p!.ore === 1 ? 'waits' : 'wait'} in your stores.` : '');
     // touch the page only when the words change, so a screen reader hears it once
     if (head + rest === said) return;
     said = head + rest;

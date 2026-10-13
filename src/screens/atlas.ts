@@ -5,7 +5,7 @@ import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar, icon, ICON } from '../ui/frame';
 import { cursorTip } from '../ui/tip';
-import { omenSight, wardens, wardenName, type Sight, type Warden } from '../realm';
+import { omenSight, skyFull, wardens, wardenName, type Sight, type Warden } from '../realm';
 import { live } from '../chain/live';
 import { guilds, type GuildEntry } from '../guild/directory';
 import { empire } from '../game/empire';
@@ -78,6 +78,7 @@ export function atlas(ctx: Ctx): Screen {
     // which of our beasts could strike their Wyrm where it hangs
     const mine = me ? [...me.structs.values()].filter((s) => alive(s) && s.online && s.type!.category === 'fleet') : [];
     const reachers = w && alive(w) && home ? mine.filter((a) => reach(a, w).weapon) : [];
+    const full = skyFull(f.planet, me);
     const soar = w && alive(w) && home && !reachers.length ? mine.find((a) => reach(a, w).soar) : undefined;
     return h('div', { class: 'scout', role: 'group', 'aria-label': 'Scouting' },
       h('p', { class: 'scout-k' }, 'Scouting'),
@@ -85,7 +86,9 @@ export function atlas(ctx: Ctx): Screen {
       guards.length ? h('p', { class: 'scout-row' }, h('span', null, 'Guarded by'), h('span', { style: { color: '#ddd0ff' } }, guards.map((g) => beastName(g.typeId)).join(', '))) : null,
       home ? h('p', { class: 'scout-row' }, h('span', null, 'At home'), h('span', null, `${riders || 'no'} ${riders === 1 ? 'beast' : 'beasts'}${state === 'fallen' ? '' : ' besides the Wyrm'}`)) : null,
       h('p', { class: 'scout-verdict' }, verdict),
-      me && w && alive(w) && home ? h('p', { class: 'scout-reach' }, reachers.length ? `Your ${andList(reachers.map((a) => beastName(a.typeId)))} can reach their Wyrm.` : soar ? `None of your beasts reach their Wyrm in ${inRealm(w.ambit)} yet; your Elder Wyrm can soar there.` : `None of your beasts can reach their Wyrm in ${inRealm(w.ambit)}.`) : null);
+      me && w && alive(w) && home ? h('p', { class: 'scout-reach' }, reachers.length ? `Your ${andList(reachers.map((a) => beastName(a.typeId)))} can reach their Wyrm.` : soar ? `None of your beasts reach their Wyrm in ${inRealm(w.ambit)} yet; your Elder Wyrm can soar there.` : `None of your beasts can reach their Wyrm in ${inRealm(w.ambit)}.`) : null,
+      // their sky holds one raider at a time: say so before the ride, not after the ledger refuses it
+      full ? h('p', { class: 'scout-reach', style: { color: 'var(--ember-ink)' } }, full) : null);
   }
 
   function pick(i: number | null) {
@@ -198,10 +201,12 @@ export function atlas(ctx: Ctx): Screen {
     const p = empire.commander;
     if (!p) { toast('Swear the oath first: you have no warband to ride.', 'warn', 5000, { label: 'Oath', run: ctx.oath }); return; }
     if (!wallet.unlocked) { toast('Your soulstone is sealed.', 'warn', 5000, { label: 'Unseal', run: ctx.oath }); return; }
+    const full = skyFull(empire.players.get(w.id)?.planet, p);
+    if (full) { toast(full, 'warn', 7000); return; }
     try {
       act.fleetMove(p, w.planetId);
       scene?.get()?.ride(sel);
-      toast(`Your warband rides for isle ${w.planetId}. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`#/skirmish/${w.id}`) });
+      toast(`Your warband rides for ${wardenName(w)}’s isle. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`#/skirmish/${w.id}`) });
     } catch (e) { toast(retellError((e as Error).message), 'enemy'); }
   }
 

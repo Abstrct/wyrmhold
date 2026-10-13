@@ -5,7 +5,7 @@ import { live } from '../chain/live';
 import { wallet } from '../wallet/wallet';
 import { empire, type PlayerState } from '../game/empire';
 import { num } from '../chain/lcd';
-import { fmtAlpha, fmtBreath, fmtMana } from '../lore';
+import { fmtAlpha, fmtBreath, fmtMana, sheaves } from '../lore';
 import { enlisting } from '../game/enlist';
 import { ambience, audio } from '../core/audio';
 import { glyph } from './glyphs';
@@ -158,7 +158,7 @@ export function paintMeters(box: HTMLElement, p: PlayerState | null) {
   const breath = empire.charge(p);
   // mana leads with what is spare, the number every summoning asks about
   const spare = cap - load;
-  const said: Record<string, string> = { alpha: `${fmtAlpha(p.alpha)} alpha`, root: `${p.ore} sheaves`, mana: spare >= 0n ? `${fmtMana(spare)} spare of ${fmtMana(cap)}` : `${fmtMana(-spare)} short`, breath: fmtBreath(breath), ward: String(wardOf(p)) };
+  const said: Record<string, string> = { alpha: `${fmtAlpha(p.alpha)} alpha`, root: sheaves(p.ore), mana: spare >= 0n ? `${fmtMana(spare)} spare of ${fmtMana(cap)}` : `${fmtMana(-spare)} short`, breath: fmtBreath(breath), ward: String(wardOf(p)) };
   noticeChange(p, box);
   const lit = (key: string) => { const g = glowUntil[key]; return g && g.until > Date.now() ? (g.up ? ' lit-up' : ' lit-down') : ''; };
   const meter = (key: string, cls: string, ...kids: (Node | string)[]) =>
@@ -167,7 +167,7 @@ export function paintMeters(box: HTMLElement, p: PlayerState | null) {
     meter('alpha', 'm-alpha',
       h('span', { class: 'k' }, h('span', null, glyph('alpha', 13), 'Alpha')), h('span', { class: 'v' }, fmtAlpha(p.alpha), h('small', { class: 'alpha-glyph' }, ' α'))),
     meter('root', 'm-root' + (p.ore > 0 ? ' risk' : ''),
-      h('span', { class: 'k' }, h('span', null, glyph('wildroot', 13), 'Wildroot')), h('span', { class: 'v' }, String(p.ore), h('small', null, ' sheaves'))),
+      h('span', { class: 'k' }, h('span', null, glyph('wildroot', 13), 'Wildroot')), h('span', { class: 'v' }, String(p.ore), h('small', null, p.ore === 1 ? ' sheaf' : ' sheaves'))),
     meter('mana', 'm-mana',
       h('span', { class: 'k' }, h('span', null, glyph('mana', 13), 'Mana'), h('span', { title: `Your beasts drink ${fmtMana(load)} of the ${fmtMana(cap)} your leylines pour` },
         h('span', { class: 'long' }, spare >= 0n ? `${fmtMana(spare)} spare` : `${fmtMana(-spare)} short`), h('span', { class: 'short' }, spare >= 0n ? fmtMana(spare) : `−${fmtMana(-spare)}`))),
