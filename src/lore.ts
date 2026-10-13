@@ -18,9 +18,9 @@ export const BEASTS: Record<number, Lore> = {
   2: { name: 'Void Behemoth', epithet: 'Whale of the empty dark', tale: 'A leviathan that swims between stars. Its low song cracks stone-skin outright, and a second, seeking cry reaches anything in Starfall.' },
   3: { name: 'Comet Sprite', epithet: 'A spark with a grudge', tale: 'A mote of falling star that never learned to stop. Its tail-lash always lands at least one blow.' },
   4: { name: 'Moth Galleon', epithet: 'Lantern-ship of the high dark', tale: 'Black oak carried by four great moth wings. The only starfarer that stoops to strike the Skies.' },
-  5: { name: 'Harpy', epithet: 'Cheapest talons aloft', tale: 'Shrieking, spiteful and quick to bind. Glamour turns aside one of every three seeking blows.' },
+  5: { name: 'Harpy', epithet: 'Cheapest talons aloft', tale: 'Shrieking, spiteful and quick to bind. Glamour turns aside two of every three seeking blows: strike it with a flung one.' },
   6: { name: 'Shade Owl', epithet: 'Hunts by not being seen', tale: 'Veiled, it can only be struck from its own realm. Striking drops the veil.' },
-  7: { name: 'Storm Gryphon', epithet: 'Rides the thunderhead', tale: 'Eagle before and lion behind, wreathed in static. Windslip carries it past one of every three flung blows.' },
+  7: { name: 'Storm Gryphon', epithet: 'Rides the thunderhead', tale: 'Eagle before and lion behind, wreathed in static. Windslip carries it past two of every three flung blows: strike it with a seeking one.' },
   8: { name: 'Siege Treant', epithet: 'Patient as a mountain', tale: 'An old tree that learned to throw boulders. Whatever it strikes cannot strike back at it.' },
   9: { name: 'Stone Troll', epithet: 'Takes three blows to fall', tale: 'Slow, mossy and very hard to kill. Stone-skin softens every blow by one.' },
   10: { name: 'Ghoul Archer', epithet: 'Looses at anything that flies', tale: 'A grave-pale bowman whose shafts seek wings and stars alike.' },
@@ -72,11 +72,15 @@ export function speak(text: string): string {
     // the node's wrappers around a refusal say nothing to a warden: keep only the reason inside them
     [/\brpc error: code = \w+ desc = /gi, ''], [/\bfailed to execute message; message index: \d+:\s*/gi, ''],
     [/^Move (.+?) → (?:fleet|planet|warband|isle) (space|air|land|water) \d+/, (_m: string, who: string, a: string) => `${who} soars into ${({ space: 'Starfall', air: 'the Skies', land: 'the Wilds', water: 'the Deeps' } as Record<string, string>)[a]}`],
+    // the Soar rite's own label ("Move Elder Wyrm to the space realm")
+    [/^Move (.+?) to the (space|air|land|water) realm$/, (_m: string, who: string, a: string) => `${who} soars into ${({ space: 'Starfall', air: 'the Skies', land: 'the Wilds', water: 'the Deeps' } as Record<string, string>)[a]}`],
     [/\b(space|air|land|water) (\d+)\b/g, (_m: string, a: string, n: string) => `${({ space: 'Starfall', air: 'Skies', land: 'Wilds', water: 'Deeps' } as Record<string, string>)[a]} ${n}`],
     [/\bambits?\b/gi, 'realm'], [/\bMove\b/g, 'Soar'],
     [/\b(?:fleet|warband) sails for\b/gi, 'Warband rides for'], [/\b(?:fleet|warband) returns home\b/gi, 'Warband rides home'], [/^Explore a new isle/i, 'Seek a new isle'],
     [/\bmust carry a zero fee\b/gi, 'must carry no offering'], [/\bzero fee\b/gi, 'no offering'], [/\bFees?\b/g, 'Offering'], [/\bfees?\b/g, 'offering'], [/\bgas\b/gi, 'strength'], [/\bthis node\b/gi, 'this keeper'], [/\bBattery\b/g, 'Breath'], [/\bwhile under_raid\b/g, 'while raiders hang overhead'], [/\bunder_raid\b/g, 'raiders overhead'], [/\bbattery\b/g, 'breath'],
     [/\bmempool\b/gi, 'the wind'],
+    // a refused plunder, wherever its words surface
+    [/\b(?:planet|isle)(?: \(\d+-\d+\))? cannot raid_complete while shields_active\b/gi, 'their Elder Wyrm still guards their isle: fell it, and the plunder lands'],
     // ledger errors name things by their marks; the warden needs the meaning, not the number
     [/\b(?:planet|isle) \(\d+-\d+\) is empty, nothing to mine\b/gi, 'your isle is spent: there is nothing left to dig. Seek a new isle'],
     [/\s*\(\d+-\d+\)/g, ''],

@@ -43,6 +43,18 @@ export default async function (t, ctx) {
     expect.includes(card, 'Your Hold', 'your own isle is yours');
     expect.ok(!/Raid this hold/.test(card), 'you cannot raid yourself');
   });
+  await t.test('scouting: a chosen foe’s card tells their Elder Wyrm, what wins, and which of your beasts can reach it', 'S2', async () => {
+    await page.eval(`const s = document.getElementById('warden-search'); s.value = 'grim'; s.dispatchEvent(new Event('input', { bubbles: true }));`);
+    await sleep(400);
+    await page.eval(`document.querySelector('[aria-label="Wardens"] .list .item').click()`);
+    await page.waitFor(`/Their Elder Wyrm/.test(document.querySelector('[aria-label="Scouting"]') ? document.querySelector('[aria-label="Scouting"]').innerText : '')`, { what: 'the scouting block', timeout: 20000 });
+    const scout = await page.eval(`document.querySelector('[aria-label="Scouting"]').innerText.replace(/\s+/g, ' ')`);
+    expect.ok(/at home, in (Starfall|the Skies|the Wilds|the Deeps)/.test(scout), 'where their Wyrm stands', scout);
+    expect.ok(/To win: fell their/.test(scout), 'what wins', scout);
+    expect.ok(/can reach their Wyrm|can soar there|can reach their Wyrm in/.test(scout), 'which of your beasts can reach it', scout);
+    await page.eval(`const s = document.getElementById('warden-search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true }));`);
+    await sleep(300);
+  });
   await t.test('the "unbrewed wildroot" filter keeps only wardens with stores, and the sky glows for them', 'S2', async () => {
     await page.clickSel('[data-tut=rich]');
     await page.waitFor(`document.querySelector('[data-tut=rich]').getAttribute('aria-pressed') === 'true'`, { what: 'the filter on' });

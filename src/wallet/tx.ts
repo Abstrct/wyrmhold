@@ -86,6 +86,17 @@ export function humanError(code: number, codespace: string, log: string): string
   if (/cannot handle new load requirements/i.test(l)) return 'Not enough spare mana for that (or no more may be summoned)';
   if (/work failure/i.test(l)) return 'The chant was refused (the clock moved) — chanting again';
   if (/insufficient charge|not enough charge|charge \(\d+\) is (less|lower)/i.test(l)) return 'Not enough breath yet — wait a few bells';
+  // war's refusals, as a warden would say them
+  const need = /required charge of (\d+)/i.exec(l);
+  if (need) return `Not enough breath yet (it needs ${need[1]}) — wait a few bells`;
+  if (/shields_active/i.test(l)) return 'Their Elder Wyrm still guards their isle: fell it, and the plunder lands';
+  if (/not_first_in_queue/i.test(l)) return 'Another warband hangs first in their sky: your plunder waits its turn';
+  if (/is out_of_range from/i.test(l)) return 'Out of reach: that realm is beyond this beast';
+  if (/is unreachable from/i.test(l)) return 'Out of reach from where your warband hangs';
+  if (/is hidden from/i.test(l)) return 'Veiled: only a beast of its own realm can find it';
+  if (/target struct \([^)]*\) is destroyed/i.test(l)) return 'It has already fallen';
+  if (/no_command_struct/i.test(l)) return 'Your warband has no Elder Wyrm to ride on';
+  if (/command_offline/i.test(l)) return 'Your Elder Wyrm slumbers: wake it to ride';
   if (/permission/i.test(l)) return 'You hold no right over that';
   if (/proof|difficulty|hash/i.test(l) && /invalid|insufficient|does not/i.test(l)) return 'The chant’s work was refused — keep chanting';
   if (/player[^.]*(is )?offline|halted|load exceeds/i.test(l) && !/must be offline/i.test(l)) return 'Your beasts drink more mana than you pour';

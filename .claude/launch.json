@@ -29,6 +29,27 @@
         "--strictPort"
       ],
       "port": 5192
+    },
+    {
+      "name": "wyrmhold-arena",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "qa/arena.mjs",
+        "--port",
+        "5194"
+      ],
+      "port": 5194
+    },
+    {
+      "name": "wyrmhold-arena-calm",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "qa/arena.mjs",
+        "--port",
+        "5195",
+        "--calm"
+      ],
+      "port": 5195
     }
   ]
 }

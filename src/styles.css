@@ -563,7 +563,8 @@ button.meter:hover { transform: translateY(-1px); border-color: rgba(243, 235, 2
 .why-line { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
 /* the Skirmish keeps the guide's corner free, folded or open */
 .strike-row > .stack:not(:has(> :not([hidden]))) { display: none; }
-@media (min-width: 1100px) { body[data-route="skirmish"] .strike-row { padding-left: 330px; flex-wrap: nowrap; } body.has-path[data-route="skirmish"] .strike-row { padding-left: 380px; } }
+/* the Skirmish's strike row: centred under the sky (see "The Skirmish, made plain" for wide screens) */
+.strike-row { justify-content: center; align-items: flex-end; gap: 12px; }
 /* heralds speak in the open sky at the centre: below the stepper and banners at the top, and
    clear of the side panels (the chant's progress sits on the right, so they must not cover it) */
 @media (min-width: 721px) and (max-width: 1059px) { #heralds { top: calc(var(--bar-bottom, 72px) + 10px); } }
@@ -689,9 +690,6 @@ dl.facts dt { font-size: 11px; }
 
 .m-mana .short { display: none; }
 
-/* a short desktop screen gives the Skirmish's height to the two warbands; heralds and the Hold's
-   chronicle still tell every strike and ride */
-@media (min-width: 721px) and (max-height: 880px) { body[data-route="skirmish"] .sk-chron { display: none; } }
 
 /* phones: the road bar scrolls sideways; a fade at its edge says there is more */
 @media (max-width: 720px) { .topbar .nav { padding-right: 36px; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); } }
@@ -725,3 +723,173 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
   body[data-route="hold"] .hud { overflow-y: auto; }
   body[data-route="hold"] .cols { flex: 1 1 0; min-height: 230px; }
 }
+
+/* ── The Skirmish, made plain (2026-10-12) ─────────────────────────────────────────────────────────
+ * The war bar says what wins and what to do next; the strike panel tells a blow before it is struck;
+ * the fray tells every blow after; words rise from the beasts in the sky. */
+.warbar-slot { display: flex; justify-content: center; }
+.warbar { width: min(780px, 100%); padding: 10px 12px 12px 16px; border-radius: 20px; }
+.warbar .stepper { margin: 0 0 8px; background: rgba(0, 0, 0, .18); }
+.warbar.ember { border-color: rgba(255, 122, 77, .45); box-shadow: 0 0 40px rgba(255, 122, 77, .12); }
+.warbar.gold { border-color: rgba(232, 200, 114, .4); }
+.wb-main { display: flex; align-items: center; gap: 14px; }
+.wb-text { flex: 1 1 auto; min-width: 0; }
+.wb-title { margin: 0; font-family: var(--display); font-size: 23px; line-height: 1.15; color: var(--gold-hi); }
+.warbar.ember .wb-title { color: var(--ember-ink); }
+.wb-line { margin: 3px 0 0; font-size: 14.5px; line-height: 1.4; color: var(--ink-2); }
+.wb-wyrm, .wb-plunder, .wb-warn { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 6px 0 0; font-size: 13px; }
+.wb-wyrm .k, .wb-plunder .k { font: 500 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.wb-wyrm .hearts { font-size: 15px; }
+.wb-guard { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 7px; border-radius: 999px; border: 1px solid rgba(180, 155, 255, .5); background: rgba(180, 155, 255, .1); color: #ddd0ff; }
+.wb-guard .hearts { font-size: 11px; }
+.wb-plunder .bar { flex: 0 1 220px; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.wb-plunder .bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--ember), var(--gold)); transition: width .6s ease; }
+.wb-warn { color: var(--ember-ink); }
+.wb-main > .btn { flex: none; }
+
+/* their hold and your warband */
+.badge { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px; font: 600 10px var(--sans); letter-spacing: .04em; text-transform: uppercase; vertical-align: 2px; white-space: nowrap; }
+.badge.wyrm { background: rgba(232, 200, 114, .14); color: var(--gold-hi); border: 1px solid rgba(232, 200, 114, .4); }
+.badge.foe-wyrm { background: rgba(255, 122, 77, .14); color: var(--ember-ink); border: 1px solid rgba(255, 122, 77, .45); }
+.badge.guard { background: rgba(180, 155, 255, .14); color: #ddd0ff; border: 1px solid rgba(180, 155, 255, .45); }
+.badge.best { background: rgba(95, 211, 181, .16); color: #b9f3e3; border: 1px solid rgba(95, 211, 181, .5); }
+.item .nm .badge { font-size: 9.5px; }
+.item.foe .reach { display: block; margin-top: 1px; font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.foe .reach .rch + .rch::before { content: ', '; color: var(--faint); }
+.item.foe .reach.none { color: #e6a58c; white-space: normal; }
+.item.far { opacity: .62; }
+.item.far:hover { opacity: .85; }
+.item .nm { white-space: normal; }
+
+/* the strike panel: who strikes whom, what will likely happen, and the button */
+.strike-panel { flex: 0 1 620px; min-width: 280px; }
+.fc-who { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; font-size: 17px; }
+.fc-a { color: var(--gold-hi); font-weight: 600; }
+.fc-t { color: #ffb69a; font-weight: 600; }
+.fc-arrow { display: inline-flex; color: var(--faint); }
+.fc-who .badge { margin-left: 2px; }
+.fc-best { margin-left: auto; min-height: 30px !important; font-size: 12.5px !important; }
+.fc-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px; margin-top: 10px; }
+.fc-chip { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(243, 235, 221, .1); min-width: 0; }
+.fc-chip .k { font: 500 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-chip .v { font: 600 17px var(--sans); color: var(--ink); font-variant-numeric: lining-nums; }
+.fc-chip.good { border-color: rgba(95, 211, 181, .45); } .fc-chip.good .v { color: #a8f0dc; }
+.fc-chip.warn { border-color: rgba(232, 200, 114, .4); } .fc-chip.warn .v { color: var(--gold-hi); }
+.fc-chip.bad { border-color: rgba(255, 122, 77, .55); background: rgba(255, 122, 77, .08); } .fc-chip.bad .v { color: #ffb69a; }
+.fc-chip.guard { border-color: rgba(180, 155, 255, .5); } .fc-chip.guard .v { color: #ddd0ff; }
+.fc-hp { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; }
+.fc-hp-row { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.hp-shift { font-size: 14px; }
+.hp-shift .lose { color: #ffcf6a; animation: hp-going 1.1s ease-in-out infinite; }
+.hp-shift .gone { color: rgba(240, 138, 138, .45); }
+@keyframes hp-going { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .hp-shift .lose { animation: none; text-decoration: line-through; } }
+.fc-why { margin: 8px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.fc-verdict { margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; font-size: 14px; line-height: 1.4; border: 1px solid transparent; }
+.fc-verdict.good { color: #b9f3e3; background: rgba(95, 211, 181, .08); border-color: rgba(95, 211, 181, .3); }
+.fc-verdict.fair { color: var(--gold-hi); background: rgba(232, 200, 114, .07); border-color: rgba(232, 200, 114, .25); }
+.fc-verdict.risky { color: var(--ember-ink); background: rgba(255, 122, 77, .1); border-color: rgba(255, 122, 77, .4); }
+.fc-verdict.deadly { color: #ffe1d6; background: rgba(160, 30, 20, .35); border-color: rgba(255, 90, 60, .7); font-weight: 600; }
+.fc-verdict.futile { color: var(--faint); background: rgba(255, 255, 255, .03); border-color: rgba(243, 235, 221, .12); }
+.fc-act { margin-top: 12px; align-items: stretch; flex-wrap: wrap; gap: 8px; }
+.fc-act .seg { align-self: center; }
+.btn.unleash { position: relative; overflow: hidden; flex: 1 1 240px; min-height: 58px; border-radius: 16px; flex-direction: column; gap: 0; padding: 6px 18px; }
+.btn.unleash .ub-l { position: relative; font: 700 18px var(--sans); letter-spacing: .02em; }
+.btn.unleash .ub-s { position: relative; font: 500 12px var(--sans); opacity: .78; }
+.btn.unleash .ub-s:empty { display: none; }
+.btn.unleash .ub-fill { position: absolute; left: 0; bottom: 0; height: 4px; width: calc(var(--fill, 0) * 100%); background: rgba(40, 10, 6, .45); transition: width .5s ease; }
+.btn.unleash.waiting { background: linear-gradient(180deg, rgba(255, 194, 160, .25), rgba(216, 85, 46, .25)); color: var(--ember-ink); border-color: rgba(255, 138, 90, .7); }
+.btn.unleash.waiting .ub-fill { height: 100%; background: linear-gradient(90deg, rgba(255, 138, 90, .35), rgba(255, 192, 74, .3)); }
+.fc-pending { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+.fc-pending:empty { display: none; }
+
+/* the fray: every blow, newest first */
+.fray .fray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(232,200,114,.35) transparent; }
+.fray-row { display: flex; gap: 9px; align-items: flex-start; }
+.fray-row.fresh { animation: fray-in .45s ease; }
+@keyframes fray-in { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .fray-row.fresh { animation: none; } }
+.fray-ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; margin-top: 1px; }
+.fray-row.ours .fray-ic { background: rgba(232, 200, 114, .16); color: var(--gold-hi); }
+.fray-row.theirs .fray-ic { background: rgba(255, 122, 77, .16); color: #ffb69a; }
+.fray-txt { min-width: 0; }
+.fray-head { margin: 0; font-size: 14px; color: var(--ink); }
+.fray-bits { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 0; }
+.fb { padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(243, 235, 221, .14); }
+.fb.hit { color: #ffd59a; border-color: rgba(255, 192, 74, .45); }
+.fb.miss { color: #bfe6ff; border-color: rgba(143, 216, 255, .4); }
+.fb.guard { color: #ddd0ff; border-color: rgba(180, 155, 255, .45); }
+.fb.back { color: #ffc2b0; border-color: rgba(255, 122, 77, .45); }
+.fb.fell { color: #fff; background: rgba(200, 50, 30, .5); border-color: rgba(255, 110, 80, .8); font-weight: 600; }
+
+/* words that rise from the beasts */
+.sk-pops { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.sk-pop { position: absolute; left: 0; top: 0; font: 800 26px var(--sans); color: #ffd36b; white-space: nowrap; will-change: transform, opacity; opacity: 0;
+  text-shadow: 0 2px 0 rgba(60, 20, 0, .9), 0 0 14px rgba(255, 140, 40, .8), 0 0 2px #000; letter-spacing: .02em; }
+.sk-pop.miss { font: italic 700 20px var(--serif); color: #cfeeff; text-shadow: 0 0 12px rgba(120, 200, 255, .8), 0 1px 0 #000; }
+.sk-pop.guard { font-size: 21px; color: #e6dcff; text-shadow: 0 0 12px rgba(180, 155, 255, .9), 0 1px 0 #000; }
+.sk-pop.back { font-size: 22px; color: #ff9d8a; text-shadow: 0 0 12px rgba(255, 90, 60, .85), 0 2px 0 rgba(50, 0, 0, .9); }
+.sk-pop.fell { font: 400 30px var(--display); color: #fff1d6; text-shadow: 0 0 18px rgba(255, 80, 40, 1), 0 0 4px #000; }
+.stage:not(:has(canvas.awake)) .sk-pops { display: none; }
+
+/* your side: the warband over the fray; mid-fight both matter, so they share the height and each keeps a floor */
+.sk-left > .sk-ours { flex: 0 1 auto; min-height: 180px; }
+.sk-left > .fray { flex: 1 1 220px; min-height: 150px; display: flex; flex-direction: column; overflow: hidden; }
+.sk-left > .fray .fray-list { flex: 1 1 auto; min-height: 0; max-height: none; }
+/* wide screens: the two sides run the full height and the strike floats between them at the bottom */
+@media (min-width: 1100px) {
+  .sk-hud .cols { flex: 1 1 0; }
+  .sk-hud .strike-row { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: calc(100% - 2 * (310px + 32px) - 2 * clamp(12px, 2vw, 24px)); max-width: 640px; z-index: 3; }
+  .sk-hud .strike-panel { flex: 1 1 auto; }
+  .sk-hud .cols > .col-l { flex-basis: 310px; }
+}
+@media (min-width: 1100px) and (max-width: 1279px) { .fc-act .seg .k { display: none; } }
+/* the view switch is pressed mid-fight: give it a finger's height */
+.fc-act .seg button { min-height: 40px; }
+/* a phone held sideways: the strike comes before the two lists, as on a phone held upright */
+@media (min-width: 721px) and (max-height: 560px) {
+  body[data-route="skirmish"] .strike-row { order: 3; }
+  body[data-route="skirmish"] .cols { order: 4; }
+}
+/* short screens: the chant's progress already lives in the war bar */
+@media (min-width: 721px) and (max-height: 880px) {
+  body[data-route="skirmish"] .warbar .stepper { display: none; }
+}
+@media (min-width: 721px) and (max-height: 760px) {
+  body[data-route="skirmish"] .fc-why { display: none; }
+  body[data-route="skirmish"] .fc-hp { display: none; }
+}
+/* phones: the war bar, the sky, then the strike itself; the lists and the fray follow */
+@media (max-width: 720px) {
+  body[data-route="skirmish"] .strike-row { order: 3; }
+  body[data-route="skirmish"] .cols { order: 4; }
+  .wb-main { flex-wrap: wrap; }
+  .wb-main > .btn { flex: 1 1 100%; }
+  .wb-title { font-size: 20px; }
+  .fc-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fc-best { margin-left: 0; }
+  .fc-chip .k { font-size: 9.5px; letter-spacing: .04em; }
+  .sk-pop { font-size: 21px; }
+}
+
+/* Fight on: a switch beside the big button; and the one-tap guard for an unguarded Wyrm */
+.fight-on { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 12px; border-radius: 999px; border: 1px solid rgba(243, 235, 221, .2); background: rgba(0, 0, 0, .2); color: var(--ink-2); font: 600 14px var(--sans); cursor: pointer; align-self: center; }
+.fight-on:hover { border-color: rgba(95, 211, 181, .6); color: #b9f3e3; }
+.fight-on .fo-pip { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(243, 235, 221, .45); }
+.fight-on.on { border-color: rgba(95, 211, 181, .8); background: rgba(95, 211, 181, .14); color: #b9f3e3; }
+.fight-on.on .fo-pip { border-color: var(--verdigris); background: var(--verdigris); box-shadow: 0 0 10px rgba(95, 211, 181, .9); animation: fo-beat 1.4s ease-in-out infinite; }
+@keyframes fo-beat { 50% { box-shadow: 0 0 2px rgba(95, 211, 181, .4); } }
+@media (prefers-reduced-motion: reduce) { .fight-on.on .fo-pip { animation: none; } }
+.wb-guardme { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 8px 0 0; padding: 6px 6px 6px 10px; border-radius: 12px; background: rgba(180, 155, 255, .08); border: 1px solid rgba(180, 155, 255, .35); font-size: 13.5px; color: #ddd0ff; }
+.wb-guardme .btn { min-height: 34px; }
+
+/* the Atlas's scouting: how their hold stands before you ride */
+.scout { margin: 14px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid rgba(243, 235, 221, .12); display: flex; flex-direction: column; gap: 5px; }
+.scout p { margin: 0; }
+.scout-k { font: 500 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.scout-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; color: var(--ink-2); }
+.scout-row > span:first-child { min-width: 112px; color: var(--muted); }
+.scout-verdict { font-size: 14.5px; line-height: 1.4; color: var(--gold-hi); }
+.scout-reach { font-size: 13.5px; line-height: 1.4; color: #b9f3e3; }
+/* a blow that would fell your own Wyrm: the button asks again, in the colour of the warning */
+.btn.unleash.deadly { background: linear-gradient(180deg, #7a2418, #4a120c); border-color: rgba(255, 90, 60, .9); color: #ffe1d6; box-shadow: 0 0 0 2px rgba(255, 90, 60, .35); }

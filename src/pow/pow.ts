@@ -40,6 +40,10 @@ export interface PowTask {
   error?: string;
   /** No auto-submit before this height (after a refusal). */
   holdUntil?: number;
+  /** A raid's isle owner: their Elder Wyrm, standing at home, keeps the plunder out. */
+  owner?: string;
+  /** Why a ripe chant is not being spoken yet (their Wyrm still guards the isle). */
+  waits?: string;
   createdAt: number;
   doneAt?: number;
 }
@@ -137,6 +141,7 @@ class PowEngine {
     if (fresh) empire.watch(playerId);
     this.discover();
   }
+  private raidWatch = new Set<string>();
   stopHelping(playerId: string) {
     this.helping.delete(playerId);
     this.saveHelping();
@@ -165,6 +170,11 @@ class PowEngine {
       seen.add(t.id);
       if (!this.tasks.has(t.id)) this.tasks.set(t.id, t);
     }
+    // a raid's isle owner is followed while the raid lasts: the chant waits on their Elder Wyrm
+    const owners = new Set([...this.tasks.values()].filter((t) => t.kind === 'raid' && seen.has(t.id) && t.owner).map((t) => t.owner!));
+    for (const o of owners) if (!this.raidWatch.has(o)) { this.raidWatch.add(o); empire.watch(o); }
+    for (const o of [...this.raidWatch]) if (!owners.has(o)) { this.raidWatch.delete(o); empire.unwatch(o); }
+    for (const t of this.tasks.values()) t.waits = raidWaits(t);
     // A task whose condition went away (built, clock reset, raid over) retires.
     for (const [id, t] of this.tasks) {
       if (!seen.has(id) && t.status !== 'submitting') {
@@ -182,7 +192,8 @@ class PowEngine {
   private tick() {
     for (const t of this.tasks.values()) {
       if (t.status === 'done' || t.status === 'submitting' || !t.best) continue;
-      if (leader.isLeader && t.best.zeros >= this.required(t) && this.settings.autoSubmit && !(t.holdUntil && live.height < t.holdUntil)) this.submit(t);
+      t.waits = raidWaits(t);
+      if (leader.isLeader && t.best.zeros >= this.required(t) && this.settings.autoSubmit && !(t.holdUntil && live.height < t.holdUntil) && !t.waits) this.submit(t);
     }
     this.schedule();
     this.emit();
@@ -317,7 +328,8 @@ class PowEngine {
   private found(t: PowTask, zeros: number, nonce: string, hash: string) {
     if (t.best && zeros <= t.best.zeros) return;
     t.best = { zeros, nonce, hash };
-    if (leader.isLeader && t.status !== 'submitting' && t.status !== 'done' && zeros >= this.required(t) && this.settings.autoSubmit && !(t.holdUntil && live.height < t.holdUntil)) this.submit(t);
+    t.waits = raidWaits(t);
+    if (leader.isLeader && t.status !== 'submitting' && t.status !== 'done' && zeros >= this.required(t) && this.settings.autoSubmit && !(t.holdUntil && live.height < t.holdUntil) && !t.waits) this.submit(t);
     this.emit();
   }
 
@@ -377,10 +389,20 @@ function tasksFor(p: PlayerState, signer?: number): PowTask[] {
   const raidStart = num(ta.blockStartRaid), shield = num(ta.planetaryShield);
   if (tgt && p.fleet && p.fleet.status === 'away' && raidStart > 0 && shield > 0) {
     const pid = tgt.Planet.id;
-    out.push({ ...base, id: `raid:${p.fleetId}:${pid}:${raidStart}`, kind: 'raid', objectId: p.fleetId, planetId: pid, blockStart: raidStart, range: shield, label: 'Plunder chant · their isle', prefix: `${p.fleetId}@${pid}RAID${raidStart}NONCE` });
+    out.push({ ...base, id: `raid:${p.fleetId}:${pid}:${raidStart}`, kind: 'raid', objectId: p.fleetId, planetId: pid, owner: tgt.Planet.owner, blockStart: raidStart, range: shield, label: 'Plunder chant · their isle', prefix: `${p.fleetId}@${pid}RAID${raidStart}NONCE` });
   }
   if (signer != null && p.account < 0) for (const t of out) t.label = `${p.name}: ${t.label}`;
   return out;
+}
+
+/** The ledger refuses a plunder while the isle's owner has an Elder Wyrm awake at home (their
+ * ward holds): say so, and keep the ripe chant until it falls. Unknown owners are tried. */
+function raidWaits(t: PowTask): string | undefined {
+  if (t.kind !== 'raid' || !t.owner) return undefined;
+  const o = empire.players.get(t.owner);
+  if (!o || !o.fleet || o.fleet.status === 'away' || !o.fleet.commandStruct) return undefined;
+  const w = o.structs.get(o.fleet.commandStruct);
+  return w && !w.destroyed && w.online ? 'their Elder Wyrm still guards the isle' : undefined;
 }
 
 export const pow = new PowEngine();

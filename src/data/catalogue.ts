@@ -19,6 +19,8 @@ export interface StructType {
   generatingRate: number; planetaryShieldContribution: number; oreMiningDifficulty: number; oreRefiningDifficulty: number;
   unguidedDefensiveSuccessRateNumerator: number; unguidedDefensiveSuccessRateDenominator: number;
   guidedDefensiveSuccessRateNumerator: number; guidedDefensiveSuccessRateDenominator: number;
+  /** War's finer print: who may guard, what a hallow does to raiders, what breaks a raid. */
+  canDefend: boolean; planetaryDefenses: string; passiveWeaponry: string; triggerRaidDefeatByDestruction: boolean;
 }
 
 export const STRUCT_TYPES: StructType[] = (raw as { types: unknown[] }).types as StructType[];
