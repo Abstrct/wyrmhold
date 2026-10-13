@@ -612,6 +612,10 @@ export function Stage(canvas, o) {
   var keyDir = md.sunV.clone(), slow = 0, fast = 0;
   var sunP = new T.Vector3(), camDir = new T.Vector3();
   function renderFrame() {
+    // a stage that was let go never draws again. three's dispose forgets what it uploaded but keeps the GL
+    // textures (cached by image source), so a late frame re-allocates them ("glTexStorage2D: Texture is
+    // immutable"), on a context that may already belong to the next stage on this canvas
+    if (!alive) return;
     U.uKeyView.value.copy(keyDir).transformDirection(camera.matrixWorldInverse);
     if (rays.enabled) {
       camera.getWorldDirection(camDir);
@@ -661,12 +665,14 @@ export function Stage(canvas, o) {
     add: function (fn) { updaters.push(fn); return fn; },
     remove: function (fn) { var i = updaters.indexOf(fn); if (i >= 0) updaters.splice(i, 1); },
     renderFrame: renderFrame,
-    ready: function () { return warm === 2; },
+    ready: function () { return alive && warm === 2; },
     resizeTo: function (w, h, ratio) { size(w, h, ratio); },
     setGrade: setGrade,
     setKey: function (v) { keyDir.copy(v).normalize(); },
     dispose: function () {
       alive = false; cancelAnimationFrame(raf);
+      // the canvas sleeps until the next stage on it draws its first frame
+      canvas.classList.remove('awake');
       if (ro) ro.disconnect(); else window.removeEventListener('resize', resize);
       scene.traverse(function (ob) {
         if (ob.geometry) ob.geometry.dispose();
