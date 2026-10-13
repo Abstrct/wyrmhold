@@ -33,6 +33,19 @@ export function addGuild(w, { name, tag = name.slice(0, 3).toUpperCase(), descri
   return { id, reactorId, subId };
 }
 
+const isle = (id, addr, pid, planetOre, shield) => ({ Planet: { id, maxOre: '5', creator: addr, owner: pid, space: ['', '', '', ''], air: ['', '', '', ''], land: ['', '', '', '', '', '', '', ''], water: ['', '', '', ''], spaceSlots: '4', airSlots: '4', landSlots: '8', waterSlots: '4', status: planetOre > 0 ? 'active' : 'complete', name: '', locationListStart: '', locationListLast: '', locationListExtra: '', locationListCount: '0' }, gridAttributes: { ore: String(planetOre) }, planetAttributes: { planetaryShield: String(shield), blockStartRaid: '0', blockRaiderArrived: '0' } });
+
+/** What a sought isle comes to on the chain: a fresh isle for a warden who has none, its warband moored there. */
+export function grantIsle(w, pid, { planetOre = 5, shield = 60 } = {}) {
+  const P = w.players.get(pid).Player;
+  const planetId = w.id('planet');
+  w.planets.set(planetId, isle(planetId, P.primaryAddress, pid, planetOre, shield));
+  P.planetId = planetId;
+  const f = w.fleets.get(P.fleetId);
+  if (f && !f.locationId) f.locationId = planetId;
+  return planetId;
+}
+
 /** A warden with an isle and a warband. `beasts` and `hallows` are [typeId, status?, extra?] lists. */
 export function addWarden(w, { name = '', guildId, beasts = [], hallows = [], ore = 0, alpha = 25_000_000, capacity = 30_000_000, connectionCapacity = 250_000, planetOre = 5, shield = 60, fleetStatus = 'onStation', fleetAt = null, noPlanet = false, lastAction = 0, hidden = false, address } = {}) {
   const pid = w.id('player'), idx = pid.split('-')[1];
@@ -40,7 +53,7 @@ export function addWarden(w, { name = '', guildId, beasts = [], hallows = [], or
   const planetId = noPlanet ? '' : w.id('planet'), fleetId = w.id('fleet');
   const addr = address || `structs1qa${idx.padStart(36, '0')}`;
   w.addresses.set(addr, pid);
-  const planet = noPlanet ? null : { Planet: { id: planetId, maxOre: '5', creator: addr, owner: pid, space: ['', '', '', ''], air: ['', '', '', ''], land: ['', '', '', '', '', '', '', ''], water: ['', '', '', ''], spaceSlots: '4', airSlots: '4', landSlots: '8', waterSlots: '4', status: planetOre > 0 ? 'active' : 'complete', name: '', locationListStart: '', locationListLast: '', locationListExtra: '', locationListCount: '0' }, gridAttributes: { ore: String(planetOre) }, planetAttributes: { planetaryShield: String(shield), blockStartRaid: '0', blockRaiderArrived: '0' } };
+  const planet = noPlanet ? null : isle(planetId, addr, pid, planetOre, shield);
   const fleet = { id: fleetId, owner: pid, locationType: 'planet', locationId: fleetAt || planetId, status: fleetStatus, locationListForward: '', locationListBackward: '', space: ['', '', '', ''], air: ['', '', '', ''], land: ['', '', '', ''], water: ['', '', '', ''], spaceSlots: '4', airSlots: '4', landSlots: '4', waterSlots: '4', commandStruct: '' };
   let structsLoad = 0, load = 0;
   const place = (typeId, status = ST.awake, extra = {}) => {

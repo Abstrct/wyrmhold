@@ -73,8 +73,17 @@ export default async function (t, ctx) {
       expect.eq(ctx.sky.w.players.get(made.pid).Player.name, 'Proofwarden', 'the warden carries the chosen name');
       const t0 = Date.now(); while ((ctx.ledger.broadcasts || 0) === before && Date.now() - t0 < 30000) await sleep(300);
       expect.ok((ctx.ledger.broadcasts || 0) > before, 'an isle was sought (a rite was broadcast)');
-      await page.waitFor(`/The Oath is sworn|Enter your Hold/.test(document.querySelector('.veil [role=dialog]') ? document.querySelector('.veil [role=dialog]').innerText : '')`, { what: 'the finish line', timeout: 30000 });
-      await page.screenshot(c.evidencePath('oath-4-sworn.png'));
+      // the isle is a rite of its own: until the ledger grants it, the oath says it is being sought, never that it awaits
+      const oathText = `document.querySelector('.veil [role=dialog]') ? document.querySelector('.veil [role=dialog]').innerText : ''`;
+      await page.waitFor(`/The Oath is sworn/i.test(${oathText})`, { what: 'the oath sworn', timeout: 30000 });
+      await sleep(2500);
+      text = await page.eval(oathText);
+      expect.ok(/Seeking your isle/i.test(text) && !/Your isle awaits|Enter your Hold|stirs on a fresh isle/i.test(text), 'before the isle exists, the oath says it is being sought', text.slice(0, 300));
+      await page.screenshot(c.evidencePath('oath-4-seeking.png'));
+      ctx.worldLib.grantIsle(w, made.pid);
+      ctx.ledger.emitTx([{ type: 'EventPlayer', key: 'player', data: { id: made.pid } }]);
+      await page.waitFor(`/Your isle awaits/.test(${oathText}) && /Enter your Hold/.test(${oathText})`, { what: 'the finish line, once the isle is granted', timeout: 30000 });
+      await page.screenshot(c.evidencePath('oath-5-sworn.png'));
       text = await visibleText(page);
       expect.ok(!/\b\d+-\d+\b/.test(text.replace(/Warden \d+-\d+/g, '')), 'no ledger marks shown during the oath', text.match(/\b\d+-\d+\b/g));
       await page.clickSel('.veil .btn.gold.block', { text: 'Enter your Hold' });
@@ -158,5 +167,94 @@ export default async function (t, ctx) {
     expect.ok(rites.includes('Swear the oath'), 'the oath is offered again', rites);
     expect.noErrors(page.errors(ALLOW), 'console');
   });
+
+  /* Two tabs share one soulstone in storage, but each holds its own soul-words in memory. A persona playtest
+   * (2026-10-13) forgot the soulstone in one tab and forged another: the other tab stayed the signer with the old
+   * words and sealed the new warden's rites with the old key, which the ledger refused ("PubKey does not match
+   * signer address … invalid pubkey"); the forgotten warden's chants went on, submitted under the new address. */
+  const W = `(await import('/src/wallet/wallet.ts')).wallet`, LEAD = `(await import('/src/core/leader.ts')).leader.isLeader`, POW = `(await import('/src/pow/pow.ts')).pow`;
+  const lifted = `!document.getElementById('boot') || document.getElementById('boot').classList.contains('gone')`;
+  const explore = (p, pid, label) => p.eval(`const { txq } = await import('/src/wallet/queue.ts'); const j = await txq.submit({ typeUrl: '/structs.structs.MsgPlanetExplore', value: { playerId: ${JSON.stringify(pid)} } }, { account: 0, label: ${JSON.stringify(label)} }); return { status: j.status, hash: j.hash }`, { timeout: 60000 }).catch((e) => ({ error: e.message }));
+  const pageB = await ctx.newPage();
+  const { addWarden } = ctx.worldLib;
+  const next = addWarden(w, { name: 'Secondstone', guildId: ctx.sky.guilds.hearth.id, beasts: [[1]] });
+  const known = [];
+  const refusedBefore = ctx.ledger.refusals.length;
+
+  await t.test('two tabs: a soulstone forgotten in one and a new one forged, the other tab lets the old words go and every rite from either tab is sealed with the new key', 'S0', async (c) => {
+    const me = ctx.sky.me;
+    try {
+      // tab A: sworn to the menagerie warden, whose summonings owe chants; it is the signer
+      await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: me.pid });
+      // a first frame's shaders hold a page's thread for a long while under software WebGL: let both skies wake first
+      await awake(page);
+      const oldAddr = await page.eval(`${W}.active.address`);
+      w.addresses.set(oldAddr, me.pid); known.push(oldAddr);
+      // tab B: the same browser profile, so the same soulstone, which opens itself there too
+      await pageB.goto(ctx.app.url + '#/grimoire');
+      await pageB.waitFor(lifted, { what: 'tab B to boot', timeout: 60000 });
+      await pageB.waitFor(`${W}.unlocked && ${W}.active.address === ${JSON.stringify(oldAddr)}`, { what: 'tab B to open the same soulstone', timeout: 60000 });
+      await awake(pageB);
+      const roles = { a: await page.eval(LEAD), b: await pageB.eval(LEAD) };
+      expect.ok(roles.a && !roles.b, 'tab A signs and tab B hands it its rites, as in the playtest', roles);
+      await page.waitFor(`[...${POW}.tasks.values()].some((t) => t.playerId === ${JSON.stringify(me.pid)})`, { what: 'the old warden’s chants in tab A', timeout: 60000 });
+
+      // tab B forgets the soulstone: tab A's Hold lets the warden go at once, not at the next reload
+      await pageB.eval(`${W}.forget(); return true`);
+      await page.waitFor(`!${W}.unlocked && /No warden is bound/.test(document.body.innerText)`, { what: 'tab A to let the forgotten soulstone go', timeout: 15000 });
+      const chants = await Promise.all([page, pageB].map((p) => p.eval(`[...${POW}.tasks.values()].filter((t) => t.playerId === ${JSON.stringify(me.pid)}).length`)));
+      expect.eq(chants.join(','), '0,0', 'the forgotten warden’s chants are dropped in both tabs');
+      await page.screenshot(c.evidencePath('tab-a-after-forget.png'));
+
+      // tab B forges a new soulstone, which the ledger knows as another warden
+      w.anyAddressPlayer = next.pid;
+      const newAddr = await pageB.eval(`await ${W}.createInstant(); await ${W}.resolvePlayers(); return ${W}.active.address`);
+      known.push(newAddr);
+      expect.ok(newAddr && newAddr !== oldAddr, 'a new soulstone was forged', newAddr);
+      // tab A opens it as it would on load, and reads the new warden (it never reloaded)
+      await page.waitFor(`${W}.unlocked && (await import('/src/game/empire.ts')).empire.commander && (await import('/src/game/empire.ts')).empire.commander.playerId === ${JSON.stringify(next.pid)}`, { what: 'tab A to follow to the new soulstone and its warden', timeout: 30000 });
+      expect.eq(await page.eval(`${W}.key(0).address`), newAddr, 'tab A derives the new soulstone’s key');
+
+      // a rite from each tab: whichever signs, it is sealed with the new key and the ledger takes it
+      for (const [p, name] of [[pageB, 'B'], [page, 'A']]) {
+        const r = await explore(p, next.pid, `A rite from tab ${name}`);
+        expect.eq(r.status, 'success', `the rite from tab ${name} lands`, r);
+        expect.eq(ctx.ledger.txs.get(r.hash)?.signer, newAddr, `the rite from tab ${name} is sealed with the new key`);
+      }
+      const refused = ctx.ledger.refusals.slice(refusedBefore);
+      expect.eq(refused.length, 0, 'nothing was sealed by one key for another’s rite', refused);
+      expect.noErrors([...page.errors(ALLOW), ...pageB.errors(ALLOW)], 'console');
+    } finally { w.anyAddressPlayer = next.pid; }
+  });
+
+  await t.test('a signer tab that has not yet heard the soulstone change still never seals with the old key', 'S0', async () => {
+    try {
+      // make tab A the signer again: tab B steps away (its lock goes with its page) and comes back behind A.
+      // about:blank, not the game's own blank page: goto() would take a same-origin page for the game and race its load
+      await pageB.goto('about:blank');
+      await page.waitFor(LEAD, { what: 'tab A to sign', timeout: 120000 });
+      await pageB.goto(ctx.app.url + '#/grimoire');
+      await pageB.waitFor(lifted, { what: 'tab B to boot', timeout: 60000 });
+      await pageB.waitFor(`${W}.unlocked`, { what: 'tab B to open the soulstone', timeout: 60000 });
+      await awake(pageB);
+      // storage events can lag another tab's write: tab A hears nothing more
+      await page.eval(`window.__deaf = (e) => e.stopImmediatePropagation(); window.addEventListener('storage', window.__deaf, true); return true`);
+      const third = await pageB.eval(`${W}.forget(); await ${W}.createInstant(); await ${W}.resolvePlayers(); return ${W}.active.address`);
+      known.push(third);
+      // tab A, still the signer with the last soulstone's words, is handed a rite for the new one
+      const id = await page.eval(`const { txq } = await import('/src/wallet/queue.ts'); return txq.enqueue({ typeUrl: '/structs.structs.MsgPlanetExplore', value: { playerId: ${JSON.stringify(next.pid)} } }, { account: 0, label: 'A rite while deaf' }).id`);
+      const j = await pageB.waitFor(`(await import('/src/wallet/queue.ts')).txq.jobs.filter((x) => x.id === ${JSON.stringify(id)} && ['success', 'failed', 'cancelled'].includes(x.status)).map((x) => ({ status: x.status, hash: x.hash, error: x.error }))[0]`, { what: 'the rite to be settled by whichever tab signs', timeout: 45000 });
+      expect.eq(j.status, 'success', 'the rite lands', j);
+      expect.eq(ctx.ledger.txs.get(j.hash)?.signer, third, 'it is sealed with the new key');
+      expect.eq(await page.eval(`${W}.unlocked && ${W}.key(0).address`), third, 'tab A let the old words go the moment it tried to use them, and opened the new soulstone');
+      const refused = ctx.ledger.refusals.slice(refusedBefore);
+      expect.eq(refused.length, 0, 'nothing was sealed by one key for another’s rite', refused);
+    } finally {
+      await page.eval(`window.removeEventListener('storage', window.__deaf, true); return true`).catch(() => null);
+      for (const a of known) w.addresses.delete(a);
+      w.anyAddressPlayer = ctx.sky.me.pid;
+    }
+  });
+  await pageB.close();
   await page.close();
 }

@@ -1,11 +1,13 @@
 /* The wallet session: vault state, the accounts it holds, and the only door to a private key.
  * Keys are derived on demand from the phrase held in memory while unlocked, used, and dropped.
  * A passphrase vault auto-locks after a quiet spell (default 45 min). A device vault (made by
- * one-click enlist) opens itself on load and never locks: there is no passphrase to ask for. */
+ * one-click enlist) opens itself on load and never locks: there is no passphrase to ask for.
+ * Every tab shares the one vault in localStorage but holds its own phrase, so each follows the
+ * others: a soulstone forgotten or replaced in one tab is let go in all of them. */
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { deriveKey, isValidMnemonic, newMnemonic, normaliseMnemonic, toHex, type KeyPair } from './keys';
-import { openDevice, openPhrase, readVault, sealDevice, sealPhrase, updateAccounts, writeVault, type VaultAccount } from './vault';
+import { openDevice, openPhrase, readVault, rootOf, sealDevice, sealPhrase, updateAccounts, VAULT_KEY, writeVault, type VaultAccount } from './vault';
 import { dropDeviceKey, newDeviceKey, readDeviceKey } from './devicekey';
 import { lcd } from '../chain/lcd';
 import { safeEach } from '../core/util';
@@ -18,16 +20,21 @@ const ACTIVE_KEY = 'wyrmhold.soulstone.active';
 
 class Wallet {
   private phrase: string | null = null;
+  /** The soulstone this tab knows (rootOf its vault). Once the vault holds another, the phrase here is not its. */
+  private stone: string | null = null;
   private listeners = new Set<Fn>();
   private lastTouch = Date.now();
 
   constructor() {
     if (typeof window === 'undefined') return;
+    this.stone = rootOf(readVault());
     for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { this.lastTouch = Date.now(); }, { passive: true, capture: true });
     window.setInterval(() => {
       const mins = this.autoLockMinutes;
       if (this.phrase && !this.deviceSealed && mins > 0 && Date.now() - this.lastTouch > mins * 60_000) this.lock();
     }, 20_000);
+    // null: another tab cleared all of storage
+    window.addEventListener('storage', (e) => { if (e.key === VAULT_KEY || e.key === null) this.follow(); });
   }
 
   get state(): WalletState { return this.phrase ? 'unlocked' : readVault() ? 'locked' : 'empty'; }
@@ -63,10 +70,7 @@ class Wallet {
     const k = deriveKey(m, 0);
     const acct: VaultAccount = { index: 0, address: k.address, label: 'Warden', role: 'primary', createdAt: Date.now() };
     writeVault(await sealPhrase(m, passphrase, [acct]));
-    this.phrase = m;
-    this.lastTouch = Date.now();
-    this.emit();
-    void this.resolvePlayers();
+    this.hold(m, k.address);
   }
 
   /** One click: a fresh 24-word phrase sealed by the device key, open at once. Or `phrase` to import one the same way. */
@@ -82,10 +86,7 @@ class Wallet {
     // The new key is stored under its own id before the vault names it, so a failed write leaves the old vault openable.
     writeVault(await sealDevice(m, key, id, accounts, same));
     if (prev?.mode === 'device' && prev.keyId !== id) void dropDeviceKey(prev.keyId ?? 'vault');
-    this.phrase = m;
-    this.lastTouch = Date.now();
-    this.emit();
-    void this.resolvePlayers();
+    this.hold(m, k.address);
   }
 
   /** On load: a device vault opens itself. A passphrase vault stays locked. */
@@ -95,29 +96,61 @@ class Wallet {
     let key: CryptoKey | null;
     try { key = await readDeviceKey(v.keyId ?? 'vault'); } catch (e) { throw new Error('This browser’s key storage did not answer (' + ((e as Error).message || 'IndexedDB error') + '). Reload to try again.'); }
     if (!key) throw new Error('This browser lost the seal on your soulstone. Speak your soul-words to bring your warden back.');
-    this.phrase = await openDevice(v, key);
-    this.lastTouch = Date.now();
-    this.emit();
-    void this.resolvePlayers();
+    this.hold(await openDevice(v, key), rootOf(v));
   }
 
   async unlock(passphrase: string) {
     const v = readVault();
     if (!v) throw new Error('No soulstone rests in this browser');
     if (v.mode === 'device') return this.restore();
-    this.phrase = await openPhrase(v, passphrase);
+    this.hold(await openPhrase(v, passphrase), rootOf(v));
+  }
+
+  /** Keep the phrase of the soulstone at `root`, just written or opened. Binding a different one
+   * than this tab knew lets the old one go, as forget() would. */
+  private hold(m: string, root: string | null) {
+    // another tab replaced the vault while this one was opening it: these words are not its
+    if (!root || rootOf(readVault()) !== root) return;
+    if (this.stone && this.stone !== root) safeEach(this.forgetL, (f) => f());
+    this.stone = root;
+    this.phrase = m;
     this.lastTouch = Date.now();
     this.emit();
     void this.resolvePlayers();
+  }
+
+  /** Another tab wrote the vault. If it now holds another soulstone (or none), the phrase here is no
+   * longer the vault's: it is dropped, and everything done on its behalf here lets go, exactly as in
+   * the tab that forgot it. A device-sealed newcomer opens itself here too, as it would on load. */
+  private follow() {
+    const now = rootOf(readVault());
+    const moved = now !== this.stone;
+    if (moved) {
+      const was = this.stone;
+      this.phrase = null;
+      this.stone = now;
+      if (was) safeEach(this.forgetL, (f) => f());
+    }
+    this.emit();
+    if (moved && now && this.deviceSealed) this.restore().catch((e) => console.warn('[wallet] the soulstone bound in another tab did not open here:', (e as Error).message));
+  }
+
+  /** The phrase, if it is still the vault's. A storage event can lag behind another tab's write, so
+   * anything about to use the phrase asks here first. */
+  private held(): string | null {
+    if (this.phrase && rootOf(readVault()) !== this.stone) this.follow();
+    return this.phrase;
   }
 
   /** A device vault has nothing to unlock with, so it stays open. */
   lock() { if (!this.phrase || this.deviceSealed) return; this.phrase = null; this.emit(); }
 
   /** Removes the vault from this browser. The phrase is the only way back. Everything that acted
-   * on its behalf (guild and chat sessions, crew, standing orders) is told to let go too. */
+   * on its behalf (guild and chat sessions, crew, standing orders) is told to let go too, here and
+   * in every other tab (they follow the vault). */
   forget() {
     this.phrase = null;
+    this.stone = null;
     const keyId = readVault()?.keyId;
     writeVault(null);
     void dropDeviceKey(keyId);
@@ -134,7 +167,8 @@ class Wallet {
     if (!v) throw new Error('No soulstone');
     if (newPass.length < 8) throw new Error('Use a passphrase of at least 8 characters');
     const device = v.mode === 'device';
-    const m = device ? (this.phrase ?? (await this.restore(), this.phrase!)) : await openPhrase(v, oldPass);
+    const m = device ? (this.held() ?? (await this.restore(), this.phrase)) : await openPhrase(v, oldPass);
+    if (!m) throw new WalletLockedError();
     const next = await sealPhrase(m, newPass, v.accounts, v);
     writeVault(next);
     if (device) { void dropDeviceKey(v.keyId ?? 'vault'); this.emit(); }
@@ -146,7 +180,11 @@ class Wallet {
   async revealPhrase(passphrase = ''): Promise<string> {
     const v = readVault();
     if (!v) throw new Error('No soulstone');
-    if (v.mode === 'device') { if (!this.phrase) await this.restore(); return this.phrase!; }
+    if (v.mode === 'device') {
+      if (!this.held()) await this.restore();
+      if (!this.phrase) throw new WalletLockedError();
+      return this.phrase;
+    }
     return openPhrase(v, passphrase);
   }
 
@@ -175,11 +213,13 @@ class Wallet {
     this.emit();
   }
 
-  /** The key for an account. Throws while locked. Callers use it and let it go. */
+  /** The key for an account. Throws while locked, or when another tab has forgotten or replaced the
+   * soulstone since this one opened it. Callers use it and let it go. */
   key(index: number): KeyPair {
-    if (!this.phrase) throw new WalletLockedError();
+    const m = this.held();
+    if (!m) throw new WalletLockedError();
     // Signing doesn't count as activity: automation must not keep an unattended vault open.
-    return deriveKey(this.phrase, index);
+    return deriveKey(m, index);
   }
 
   /** Off-chain proof signatures the guild stack understands: secp256k1 over sha256(utf8),

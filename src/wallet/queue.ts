@@ -93,6 +93,8 @@ class TxQueue {
     const follow = () => { if (wallet.unlocked) leader.want(); else leader.resign(); };
     wallet.onChange(() => { follow(); this.wake(); });
     follow();
+    // The soulstone was forgotten or replaced, in this tab or another (the wallet tells every tab).
+    wallet.onForget(() => this.letGo());
     leader.onChange((on) => { if (on) { this.load(); this.drainInbox(); this.emitLocal(); this.wake(); } });
     // Other tabs: the signer's queue changed (mirror it) or someone handed us moves (sign them).
     window.addEventListener('storage', (e) => {
@@ -201,6 +203,14 @@ class TxQueue {
 
   clearDone() { this.op({ op: 'clear' }); }
 
+  /** A soulstone gone: its accounts' sequence numbers mean nothing now (the next one's index 0 is
+   * another account), and rites still waiting for its keys are let go, since no other key may sign them. */
+  private letGo() {
+    this.seq.clear();
+    this.sentAt.clear();
+    for (const j of [...this.jobs]) if (j.signer && wallet.account(j.account)?.address !== j.signer) this.cancel(j.id);
+  }
+
   /** Which tab signs: this one, another one, or none (every vault locked). */
   get signerHere() { return leader.isLeader; }
 
@@ -270,6 +280,8 @@ class TxQueue {
     let sent = false;
     try {
       const key = wallet.key(j.account);
+      // only the key the rite was queued for may seal it; the ledger would refuse any other as a stranger's
+      if (j.signer && key.address !== j.signer) { this.fail(j, 'Queued for a key that is no longer this account — not signing it'); return; }
       const cid = await chainId();
       let s = this.seq.get(j.account);
       if (!s) {
@@ -349,7 +361,7 @@ class TxQueue {
           if (Date.now() - (j.pendingSince ?? j.updatedAt) > 90_000) {
             this.seq.delete(j.account);
             const addr = wallet.account(j.account)?.address;
-            if (!addr) { this.fail(j, 'Its warden left this soulstone; what became of it is unknown'); continue; }
+            if (!addr || (j.signer && addr !== j.signer)) { this.fail(j, 'Its warden left this soulstone; what became of it is unknown'); continue; }
             const a = await account(addr).catch(() => null);
             if (!a) continue;
             if (j.signedSeq != null && a.sequence > BigInt(j.signedSeq)) this.fail(j, 'Not found, but its slot in the account sequence was used — it may have landed; not re-sending');

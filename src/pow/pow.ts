@@ -77,6 +77,8 @@ class PowEngine {
     try { this.helping = new Map(JSON.parse(localStorage.getItem('wyrmhold.chant.help') || '[]')); } catch { /* none */ }
     for (const pid of this.helping.keys()) empire.watch(pid);
     empire.onChange(() => this.discover());
+    // forgotten or replaced in any tab: every tab hears it, and its chants for that soulstone stop
+    wallet.onForget(() => this.resetForVault());
     leader.onChange(() => this.schedule());
     live.onBlock(() => { this.tick(); });
     txq.onSettled((j) => {
@@ -157,18 +159,29 @@ class PowEngine {
     this.save({ signers: m });
     this.discover();
   }
-  /** Forget every per-vault setting (crew, signers): they name accounts of a phrase that is gone. */
+  /** The soulstone was forgotten or replaced (in this tab or another): its chants stop here, unsung and
+   * unspoken, and every per-vault setting (crew, signers) goes, since they name accounts of a phrase that is gone. */
   resetForVault() {
-    for (const pid of [...this.helping.keys()]) this.stopHelping(pid);
+    for (const id of this.tasks.keys()) this.release(id);
+    this.tasks.clear();
+    const crew = [...this.helping.keys()];
+    this.helping.clear();
+    this.saveHelping();
+    for (const pid of crew) empire.unwatch(pid);
     this.save({ signers: {} });
+    this.discover();
   }
   private saveHelping() { try { localStorage.setItem('wyrmhold.chant.help', JSON.stringify([...this.helping])); } catch { /* ignore */ } }
 
   discover() {
     const seen = new Set<string>();
-    for (const p of empire.players.values()) for (const t of tasksFor(p, p.account < 0 ? this.helping.get(p.playerId) : this.settings.signers?.[p.playerId])) {
-      seen.add(t.id);
-      if (!this.tasks.has(t.id)) this.tasks.set(t.id, t);
+    for (const p of empire.players.values()) {
+      // a warden whose soulstone was just forgotten lingers in the empire a moment: it owes us nothing now
+      if (p.account >= 0 && !wallet.byPlayer(p.playerId)) continue;
+      for (const t of tasksFor(p, p.account < 0 ? this.helping.get(p.playerId) : this.settings.signers?.[p.playerId])) {
+        seen.add(t.id);
+        if (!this.tasks.has(t.id)) this.tasks.set(t.id, t);
+      }
     }
     // a raid's isle owner is followed while the raid lasts: the chant waits on their Elder Wyrm
     const owners = new Set([...this.tasks.values()].filter((t) => t.kind === 'raid' && seen.has(t.id) && t.owner).map((t) => t.owner!));

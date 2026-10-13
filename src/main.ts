@@ -97,7 +97,6 @@ async function boot() {
   await Promise.race([wallet.restore(), new Promise((r) => setTimeout(r, 5000))])
     .catch((e) => toast((e as Error).message, 'enemy', 9000, { label: 'Soulstone', run: openOath }));
   wallet.onChange(resumeEnlist); resumeEnlist();
-  wallet.onForget(() => pow.resetForVault());
   void empire; void pow;
   if (wallet.state === 'locked' && txq.active.length) toast(`${txq.active.length} rite(s) wait for your soulstone`, 'warn', 6000, { label: 'Unseal', run: openOath });
   window.addEventListener('hashchange', route);

@@ -16,6 +16,7 @@ export class Ledger {
     this.sockets = new Set();
     this.txs = new Map();   // hash → { height, raw }
     this.sequences = new Map();
+    this.refusals = [];   // txs sealed by one key for another's messages, as the ante handler refuses them
     this.ticking = 0;
     this.onRequest = null;
   }
@@ -138,6 +139,7 @@ export class Ledger {
     if (seg[0] === 'cosmos' && seg[1] === 'bank') return json(res, 200, { balances: [{ denom: 'ualpha', amount: '5000000' }] });
     if (path === '/cosmos/tx/v1beta1/simulate') {
       if (w.refuse) return json(res, 400, { code: 3, message: w.refuse });
+      { let raw = ''; try { raw = JSON.parse(body).tx_bytes || ''; } catch { /* ignore */ } const why = this.stranger(raw); if (why) return json(res, 400, { code: 8, message: why }); }
       // a rig that plays the chain's part (the arena) may refuse a rite the way the chain would
       if (this.onSimulate) { let raw = ''; try { raw = JSON.parse(body).tx_bytes || ''; } catch { /* ignore */ } const why = this.onSimulate(raw); if (why) return json(res, 400, { code: 2, message: why }); }
       return json(res, 200, { gas_info: { gas_used: '120000' } });
@@ -145,7 +147,9 @@ export class Ledger {
     if (path === '/cosmos/tx/v1beta1/txs' && method === 'POST') {
       let raw = ''; try { raw = JSON.parse(body).tx_bytes || ''; } catch { /* ignore */ }
       const hash = createHash('sha256').update(Buffer.from(raw, 'base64')).digest('hex').toUpperCase();
-      this.txs.set(hash, { height: 0, raw, at: Date.now() });
+      const why = this.stranger(raw);
+      if (why) return json(res, 200, { tx_response: { code: 8, codespace: 'sdk', raw_log: why, txhash: hash } });
+      this.txs.set(hash, { height: 0, raw, at: Date.now(), signer: readTx(raw)?.signer });
       this.broadcasts = (this.broadcasts || 0) + 1;
       // the signer's sequence moves on; the client keeps its own and re-reads on a mismatch
       const signer = w.lastSigner; if (signer) this.sequences.set(signer, (this.sequences.get(signer) || 0) + 1);
@@ -155,6 +159,16 @@ export class Ledger {
     const mt = /^\/cosmos\/tx\/v1beta1\/txs\/([0-9A-Fa-f]+)$/.exec(path);
     if (mt) { const t = this.txs.get(mt[1].toUpperCase()); if (!t || !t.height) return json(res, 404, { code: 5, message: `tx not found: ${mt[1]}` }); return json(res, 200, { tx_response: { txhash: mt[1], height: String(t.height), code: t.code || 0, raw_log: t.log || '[]', gas_used: '110000', events: t.events || [] } }); }
     return notFound(res, path);
+  }
+
+  /** The ante handler's first check: every message's creator must be the key that sealed the tx. The
+   * refusal reads as the chain's does ("PubKey does not match signer address … invalid pubkey"). */
+  stranger(raw) {
+    const t = readTx(raw);
+    const bad = t && t.msgs.find((m) => m.creator && m.creator !== t.signer);
+    if (!bad) return null;
+    this.refusals.push({ signer: t.signer, creator: bad.creator, type: bad.type, at: Date.now() });
+    return `pubKey does not match signer address ${bad.creator} with signer index: 0: invalid pubkey`;
   }
 
   /** The mock coven's scribe: enough of the Guild API for the oath. */
@@ -170,6 +184,50 @@ export class Ledger {
     if (rest === 'api/auth/check-username' || /^api\/username\//.test(rest)) return ok({ available: true });
     return ok({});
   }
+}
+
+/* ── A signed tx, read as far as the ante handler reads it ─────────── */
+function fields(buf) {
+  const out = new Map();
+  let i = 0;
+  const vint = () => { let r = 0n, s = 0n; for (;;) { if (i >= buf.length) throw new Error('truncated'); const b = buf[i++]; r |= BigInt(b & 127) << s; if (!(b & 128)) return r; s += 7n; } };
+  while (i < buf.length) {
+    const key = Number(vint()), no = key >>> 3, wire = key & 7;
+    let v;
+    if (wire === 0) v = vint();
+    else if (wire === 2) { const n = Number(vint()); v = buf.subarray(i, i + n); i += n; }
+    else if (wire === 1) { v = buf.subarray(i, i + 8); i += 8; }
+    else if (wire === 5) { v = buf.subarray(i, i + 4); i += 4; }
+    else throw new Error('wire type ' + wire);
+    if (!out.has(no)) out.set(no, []);
+    out.get(no).push(v);
+  }
+  return out;
+}
+const one = (buf, no) => (buf ? fields(buf).get(no) || [] : [])[0];
+
+const B32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+function bech32(hrp, bytes) {
+  const words = [];
+  let acc = 0, bits = 0;
+  for (const b of bytes) { acc = ((acc << 8) | b) & 0xfff; bits += 8; while (bits >= 5) { bits -= 5; words.push((acc >> bits) & 31); } }
+  if (bits) words.push((acc << (5 - bits)) & 31);
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let c = 1;
+  for (const v of [...[...hrp].map((x) => x.charCodeAt(0) >> 5), 0, ...[...hrp].map((x) => x.charCodeAt(0) & 31), ...words, 0, 0, 0, 0, 0, 0]) { const top = c >> 25; c = ((c & 0x1ffffff) << 5) ^ v; for (let k = 0; k < 5; k++) if ((top >> k) & 1) c ^= GEN[k]; }
+  c ^= 1;
+  return hrp + '1' + [...words, ...Array.from({ length: 6 }, (_, k) => (c >> (5 * (5 - k))) & 31)].map((x) => B32[x]).join('');
+}
+
+/** Who sealed a signed tx (the address of its first signer's public key) and the creator each of its
+ * messages names (field 1 of every structs message). Null when the bytes are not a tx. */
+export function readTx(b64) {
+  try {
+    const raw = Buffer.from(b64, 'base64');
+    const pk = one(one(one(one(one(raw, 2), 1), 1), 2), 1);
+    const msgs = (fields(one(raw, 1)).get(1) || []).map((a) => ({ type: Buffer.from(one(a, 1)).toString(), creator: Buffer.from(one(one(a, 2), 1) || []).toString() }));
+    return { signer: bech32('structs', createHash('ripemd160').update(createHash('sha256').update(pk).digest()).digest()), msgs };
+  } catch { return null; }
 }
 
 /* ── RFC 6455, the little we need ─────────────────────────────────── */

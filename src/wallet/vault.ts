@@ -5,7 +5,7 @@
  * dropped on lock. Public facts (addresses, labels, player ids) are stored in the clear so the
  * client can show your empire before you unlock. */
 
-const KEY = 'wyrmhold.soulstone.v1';
+export const VAULT_KEY = 'wyrmhold.soulstone.v1';
 const ROUNDS = 600_000;
 
 export interface VaultAccount {
@@ -77,7 +77,7 @@ export async function openPhrase(file: VaultFile, passphrase: string): Promise<s
 
 export function readVault(): VaultFile | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(VAULT_KEY);
     if (!raw) return null;
     const v = JSON.parse(raw) as VaultFile;
     return v && v.v === 1 && v.ct ? v : null;
@@ -86,12 +86,15 @@ export function readVault(): VaultFile | null {
 
 export function writeVault(v: VaultFile | null) {
   try {
-    if (v) localStorage.setItem(KEY, JSON.stringify(v));
-    else localStorage.removeItem(KEY);
+    if (v) localStorage.setItem(VAULT_KEY, JSON.stringify(v));
+    else localStorage.removeItem(VAULT_KEY);
   } catch (e) {
     throw new Error('This browser would not keep your soulstone: ' + (e as Error).message);
   }
 }
+
+/** Which soulstone a vault holds: the address of its first key. Re-sealing keeps it; another phrase changes it. */
+export const rootOf = (v: VaultFile | null) => v?.accounts.find((a) => a.index === 0)?.address ?? null;
 
 /** Public account facts only (no ciphertext change): labels, player ids, roles. */
 export function updateAccounts(mut: (a: VaultAccount[]) => VaultAccount[]) {
