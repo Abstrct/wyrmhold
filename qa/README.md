@@ -227,7 +227,14 @@ defender's Wyrm stands. Each rite is told back as the same `EventAttack` / `Even
 node qa/arena.mjs                 # http://127.0.0.1:5194/#/skirmish/1-2 · Grimwald strikes back every 15 s
 node qa/arena.mjs --calm          # a foe who never strikes
 node qa/arena-shots.mjs OUT after # captures of the Skirmish (also: before, devices, fun)
+node qa/playtest.mjs "$PWD" 5182 new-default 2   # bots that only do what the screen shows them
 ```
+
+`qa/playtest.mjs` plays whole raids as a first-time player would: press the big button when it is
+ready (`new-default`), or switch on Fight on (`new-fighton`), or, on the screen before the redesign,
+pick the first beast and mark (`old-first`) or aim Wyrm at Wyrm (`old-wyrm`). On 2026-10-12 the old
+screen won 1 raid in 9 and lost the Wyrm in 8; the new one won 11 of 12 counted (the twelfth was won but
+missed by an earlier count) and lost none, and told every blow's result on screen.
 
 Swear in the page's console as the arena's warden (any soulstone maps to them):
 `const { wallet } = await import('/src/wallet/wallet.ts'); await wallet.createInstant(); await wallet.resolvePlayers();`
