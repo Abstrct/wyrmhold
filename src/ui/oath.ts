@@ -4,10 +4,13 @@
 import { h, clear, confirmBox, toast } from '../core/dom';
 import { wallet } from '../wallet/wallet';
 import { enlist, enlisting, retryEnlist } from '../game/enlist';
+import { explore } from '../game/onboard';
 import { guilds, guildsNow, DEFAULT_GUILD, type GuildEntry } from '../guild/directory';
 import { covenColor, covenName, speak } from '../lore';
 import { icon, ICON, sigil } from './frame';
 import { empire } from '../game/empire';
+import { txq } from '../wallet/queue';
+import { claimJob, releaseClaim } from '../core/claims';
 
 let open: HTMLElement | null = null;
 
@@ -46,7 +49,7 @@ export function openOath(start?: unknown) {
   open = veil;
   document.body.append(veil);
   let offs: (() => unknown)[] = [];
-  function close() { offs.forEach((f) => f()); veil.remove(); open = null; document.removeEventListener('keydown', esc); window.removeEventListener('hashchange', close); }
+  function close() { offs.forEach((f) => f()); if (seekClaim) releaseClaim(seekClaim); veil.remove(); open = null; document.removeEventListener('keydown', esc); window.removeEventListener('hashchange', close); }
   const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
 
   let mode: 'choose' | 'speak' | 'keep' | 'coven' | 'words' | 'pass' = start === 'words' ? 'words' : 'choose';
@@ -64,6 +67,7 @@ export function openOath(start?: unknown) {
   let swearErr = '', speakErr = '', passErr = '';
   let ticked = false;
   let spoken = '';
+  let seekClaim = '';   // the isle rite, whose failure this dialog tells while it is open
 
   const head = (eyebrow: string, title: string) => h('div', { class: 'row between', style: { alignItems: 'flex-start', flexWrap: 'nowrap' } },
     h('div', null, h('p', { class: 'eyebrow' }, eyebrow), h('h2', { id: 'oath-title', style: { marginTop: '6px' } }, title)),
@@ -183,6 +187,21 @@ export function openOath(start?: unknown) {
     // Sworn in this very dialog: a finish line, not a ledger entry.
     if (sworeHere && (a?.playerId || job?.status === 'done')) {
       const guildName = job?.guildName || covenOf(coven);
+      // The scribe writing the warden in is not the isle: that is a rite of its own, a few bells later.
+      if (!empire.commander?.planetId) {
+        const seek = txq.jobs.filter((j) => a?.playerId && j.playerId === a.playerId && j.msgs.some((m) => /MsgPlanetExplore$/.test(m.typeUrl))).pop();
+        const failed = seek?.status === 'failed' ? seek : null;
+        if (seek && !failed) claimJob(seekClaim = seek.id);
+        body.append(head('The Oath is sworn', failed ? 'No isle yet' : 'Seeking your isle…'),
+          road(3, !failed),
+          h('p', null, `${job?.name || name}, ${guildName} has written you into the ledger. ` + (failed ? 'But the sky did not give you an isle:' : 'Now the sky is finding you a fresh isle, where your Elder Wyrm will stir. This takes a few moments.')),
+          failed ? h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, speak(failed.error || 'the ledger refused'))) : '',
+          h('div', { class: 'row end', style: { marginTop: '12px' } }, failed
+            // a fresh seek, never the old rite sent again (a warden with no isle has nothing to lose by it)
+            ? h('button', { type: 'button', class: 'btn gold', onclick: () => { if (a?.playerId) explore(a.index, a.playerId); } }, 'Seek an isle again')
+            : h('button', { type: 'button', class: 'btn ghost small', onclick: close }, 'Look around while it finishes')));
+        return;
+      }
       body.append(head('The Oath is sworn', 'Your isle awaits'),
         road(4),
         h('div', { class: 'sworn' }, sigil(64)),
@@ -332,7 +351,7 @@ export function openOath(start?: unknown) {
     check();
   }
   // empire.onChange calls back at once: wire listeners only after the state above exists.
-  offs = [wallet.onChange(() => paint()), enlisting.onChange(() => paint()), empire.onChange(() => paint())];
+  offs = [wallet.onChange(() => paint()), enlisting.onChange(() => paint()), empire.onChange(() => paint()), txq.onChange(() => { if (sworeHere) paint(); })];
   // keyboard and screen-reader users land inside the dialog, on its first real choice
   setTimeout(() => (body.querySelector('input:not([type=checkbox]), button.choice, .btn.gold') as HTMLElement | null)?.focus(), 60);
   document.addEventListener('keydown', esc);

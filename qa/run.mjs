@@ -5,6 +5,7 @@
  *   node qa/run.mjs                  # everything
  *   node qa/run.mjs hold assets      # named suites
  *   node qa/run.mjs --list           # what there is
+ *   node qa/run.mjs flows --grep tab # only the checks whose name matches (a case-blind pattern)
  *   options: --headed  --keep (leave servers up)  --out DIR  --app URL (an already running game, mock ledger still ours)
  *            --blockMs N (bells; default 1000)  --net (also compare the catalogue with the public ledger) */
 import { mkdirSync } from 'node:fs';
@@ -42,6 +43,7 @@ const headed = flag('--headed'), keep = flag('--keep'), net = flag('--net');
 const out = resolve(opt('--out', join(HERE, 'reports', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19))));
 const appUrlOpt = opt('--app', null);
 const blockMs = Number(opt('--blockMs', 1000));
+const grep = opt('--grep', null);
 const wanted = args.filter((a) => !a.startsWith('--'));
 const unknown = wanted.filter((w) => !SUITES.some(([n]) => n === w));
 if (unknown.length) { console.error('unknown suite(s): ' + unknown.join(', ')); process.exit(2); }
@@ -66,6 +68,7 @@ const ctx = { browser, app, ledger, sky, report, out, net, worldLib, async newPa
 let failedToLoad = 0;
 for (const [name, pillar] of chosen) {
   const suite = report.suite(name, pillar);
+  if (grep) { const re = new RegExp(grep, 'i'), all = suite.test.bind(suite); suite.test = (n, sev, fn) => (re.test(n) ? all(n, sev, fn) : Promise.resolve('skip')); }
   try { const mod = await import(join(HERE, 'suites', name + '.mjs')); await mod.default(suite, ctx); }
   catch (e) { failedToLoad++; report.add({ suite: name, pillar, name: '(suite)', severity: 'S0', status: 'fail', message: 'the suite itself failed: ' + e.message, details: [e.stack], ms: 0 }); }
   // every suite leaves the sky as it found it
