@@ -293,12 +293,16 @@ export function skirmish(ctx: Ctx): Screen {
     if (!inFight() || (won && won.pid === targetPid)) { stop(''); return; }
     // once their ward is broken the raid is won by holding their sky, not by striking: rest
     if (oursAbroad() && !wardKeeper(foe())) { stop('Fight on rests: their ward is broken. Hold their sky while your chant plunders.'); return; }
-    if (pendingStrike() || unheard) return;
+    if (pendingStrike() || unheard || guarding) return;
+    const w = wyrmOf(p);
+    // a Wyrm whose guard fell is guarded again before the next blow, as the big button would
+    const g = w && alive(w) && !unguardedOk ? guardFor(p, w) : null;
+    if (g && w) { autoBusy = true; queueMicrotask(() => { try { guardWyrm(g, w); } finally { autoBusy = false; } }); return; }
     const m = autoMove(allMoves());
     if (!m) { stop('Fight on stops: no blow in reach is safe for your Wyrm.'); return; }
     // a wounded Wyrm fights on only to strike the blow that surely ends it
-    const w = wyrmOf(p), finisher = isWyrm(m.t) && m.f.fellMark >= 0.995;
-    if (w && alive(w) && w.health <= 2 && oursAbroad() && !finisher) { stop(`Fight on stops: your Elder Wyrm has ${w.health} ${w.health === 1 ? 'heart' : 'hearts'}. Strike by hand, or ride home.`); return; }
+    const finisher = isWyrm(m.t) && m.f.fellMark >= 0.995;
+    if (w && alive(w) && w.health <= 2 && oursAbroad() && menaced(w) && !finisher) { stop(`Fight on stops: your Elder Wyrm has ${w.health} ${w.health === 1 ? 'heart' : 'hearts'}. Strike by hand, or ride home.`); return; }
     if (atk !== m.a.id || mark !== m.t.id) { atk = m.a.id; mark = m.t.id; chose = false; sigs.strike = ''; }
     const cost = m.f.arm.charge;
     if (empire.charge(p) < cost) return;
