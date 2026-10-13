@@ -4,6 +4,7 @@
 import { h, clear, confirmBox, toast } from '../core/dom';
 import { wallet } from '../wallet/wallet';
 import { enlist, enlisting, retryEnlist } from '../game/enlist';
+import { explore } from '../game/onboard';
 import { guilds, guildsNow, DEFAULT_GUILD, type GuildEntry } from '../guild/directory';
 import { covenColor, covenName, speak } from '../lore';
 import { icon, ICON, sigil } from './frame';
@@ -196,7 +197,8 @@ export function openOath(start?: unknown) {
           h('p', null, `${job?.name || name}, ${guildName} has written you into the ledger. ` + (failed ? 'But the sky did not give you an isle:' : 'Now the sky is finding you a fresh isle, where your Elder Wyrm will stir. This takes a few moments.')),
           failed ? h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, speak(failed.error || 'the ledger refused'))) : '',
           h('div', { class: 'row end', style: { marginTop: '12px' } }, failed
-            ? h('button', { type: 'button', class: 'btn gold', onclick: () => txq.retry(failed.id) }, 'Seek an isle again')
+            // a fresh seek, never the old rite sent again (a warden with no isle has nothing to lose by it)
+            ? h('button', { type: 'button', class: 'btn gold', onclick: () => { if (a?.playerId) explore(a.index, a.playerId); } }, 'Seek an isle again')
             : h('button', { type: 'button', class: 'btn ghost small', onclick: close }, 'Look around while it finishes')));
         return;
       }
