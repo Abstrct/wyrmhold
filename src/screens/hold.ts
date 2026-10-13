@@ -7,7 +7,7 @@ import { mountScene, type Ctx, type Screen } from './types';
 import { topbar, hearts, icon, ICON } from '../ui/frame';
 import { chantsPanel, chroniclePanel } from '../ui/chants';
 import { empire, type OwnedStruct, type PlayerState } from '../game/empire';
-import { act, actionBlock, buildBlock, exploreConfirmed, verbsFor } from '../game/actions';
+import { act, actionBlock, buildBlock, canRetry, exploreConfirmed, verbsFor } from '../game/actions';
 import { wallet } from '../wallet/wallet';
 import { txq, type TxJob } from '../wallet/queue';
 import { claimJob, releaseClaim } from '../core/claims';
@@ -15,7 +15,7 @@ import { markPath, pathHas } from '../ui/guide';
 import { STRUCT_TYPES, typeOf, type Ambit } from '../data/catalogue';
 import { num } from '../chain/lcd';
 import { live } from '../chain/live';
-import { AMBIT_OF_REALM, HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, fmtAlpha, fmtBreath, fmtMana, lore, reachOf, retell, retellError, type Realm } from '../lore';
+import { AMBIT_OF_REALM, HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, fmtAlpha, fmtBreath, fmtMana, lore, reachOf, retell, retellError, sheaves, type Realm } from '../lore';
 import { freeCircle, owned, playerName, raidersAt, realmOf, unitsOf } from '../realm';
 import { glyph } from '../ui/glyphs';
 import { holdTour } from '../ui/tour';
@@ -115,11 +115,15 @@ export function hold(ctx: Ctx): Screen {
           off(); pendingClaims.delete(j.id);
           if (j.status !== 'failed') return;
           const text = `That rite did not land: ${retellError(j.error || 'the ledger refused')}.`;
-          // trying again goes back through rite, so a second failure is heard too
-          const again = () => rite(p, () => { txq.retry(j.id); return j; }, needsGrid, sel === sid ? sid : undefined);
+          // trying again goes back through rite, so a second failure is heard too; a stale one is not sent blind
+          const again = () => {
+            if (!canRetry(j)) { note(sel === sid ? sid : undefined, 'That was a while ago, and the sky has moved on. Start the rite afresh if you still want it.'); return; }
+            rite(p, () => { txq.retry(j.id); return j; }, needsGrid, sel === sid ? sid : undefined);
+          };
           // the card now shows another beast: say it at the edge instead of losing it
-          if (sel !== sid) toast(text, 'enemy', 8000, { label: 'Try again', run: again });
-          else note(sid, text, 'Try again', again);
+          const offer = canRetry(j);
+          if (sel !== sid) toast(text, 'enemy', 8000, offer ? { label: 'Try again', run: again } : undefined);
+          else if (offer) note(sid, text, 'Try again', again); else note(sid, text);
         });
         watching$.push(off);
       }
@@ -190,7 +194,7 @@ export function hold(ctx: Ctx): Screen {
       else omen('gold', `${who(r.owner).replace(/^y/, 'Y')} warband hangs over this isle. Fell their Elder Wyrm and the plunder chant runs.`, wallet.byPlayer(r.owner) ? ['Fight', () => ctx.go(`#/skirmish/${p.playerId}`)] : undefined);
     }
     if (!p.online) omen('ember', mine ? 'Your leylines are overdrawn: every beast gutters until load fits the flow. Slumber something, or feed a spring.' : 'Their leylines are overdrawn: their beasts gutter.');
-    if (p.ore > 0 && !mine) omen('gold', `${p.ore} ${p.ore === 1 ? 'sheaf' : 'sheaves'} of their wildroot lie unbrewed: a raid could carry ${p.ore === 1 ? 'it' : 'them'} off.`, ['Plan a raid', () => ctx.go(`#/skirmish/${p.playerId}`)]);
+    if (p.ore > 0 && !mine) omen('gold', `${sheaves(p.ore)} of their wildroot ${p.ore === 1 ? 'lies' : 'lie'} unbrewed: a raid could carry ${p.ore === 1 ? 'it' : 'them'} off.`, ['Plan a raid', () => ctx.go(`#/skirmish/${p.playerId}`)]);
     // only a Cauldron that stands awake on this isle is really brewing (as the chant engine sees it)
     const brewing = p.online && [...p.structs.values()].some((x) => x.typeId === 15 && !x.destroyed && x.built && x.online && x.locationId === p.planetId);
     if (p.ore > 0 && mine) omen('ember', brewing
@@ -200,7 +204,7 @@ export function hold(ctx: Ctx): Screen {
     const ground = num(p.planet?.gridAttributes?.ore);
     if (!p.planetId || (p.planet && ground <= 0 && p.ore === 0)) omen('teal', !mine ? (p.planetId ? 'Their isle is spent: nothing left to dig or take.' : 'This warden holds no isle.') : p.planetId ? 'Your isle is spent: no wildroot left in its marrow.' : 'You hold no isle yet.', mine ? [p.planetId ? 'Seek a new isle' : 'Find your first isle', () => rite(p, () => exploreConfirmed(p), false)] : undefined);
     // a brand-new warden hears one next step at a time: first meet the Wyrm (Ysolde says so), then this
-    else if (ground > 0 && !owned(p, 14) && mine && pathHas('wyrm')) omen('teal', `The ground of your isle still holds ${ground} sheaves of wildroot. A Root Delver would dig them up.`, ['Summon a Delver', () => summonDialog(p, 14)]);
+    else if (ground > 0 && !owned(p, 14) && mine && pathHas('wyrm')) omen('teal', `The ground of your isle still holds ${sheaves(ground)} of wildroot. A Root Delver would dig ${ground === 1 ? 'it' : 'them'} up.`, ['Summon a Delver', () => summonDialog(p, 14)]);
     const sorted = queued.map((q, i) => ({ ...q, i })).sort((a, b) => a.rank - b.rank || a.i - b.i);
     // a short screen hears the most urgent notice only, so the roster below keeps its room
     const room = matchMedia('(min-width: 721px) and (max-height: 780px)').matches ? 1 : 2;
@@ -329,7 +333,7 @@ export function hold(ctx: Ctx): Screen {
     }
     rites.append(
       btn('summon', 'Summon', '8 breath', 'var(--gold)', () => { if (riteP) summonDialog(riteP); }, false, 'summon'),
-      btn('seek', 'Seek Isle', !p.planetId ? 'begin here' : !p.planet ? 'a new shard' : num(p.planet?.gridAttributes?.ore) > 0 ? 'abandon this isle' : 'yours is dug out', 'var(--violet)', () => { const q = riteP; if (q) rite(q, () => exploreConfirmed(q), false); }, false, 'seek'),
+      btn('seek', 'Seek Isle', !p.planetId ? 'begin here' : !p.planet ? 'a new shard' : num(p.planet?.gridAttributes?.ore) > 0 ? 'once yours is dug out' : 'yours is dug out', 'var(--violet)', () => { const q = riteP; if (q) rite(q, () => exploreConfirmed(q), false); }, false, 'seek'),
       p.fleet?.status === 'away'
         ? btn('home', 'Ride Home', 'your hold is unguarded', 'var(--sky)', () => { const q = riteP; if (q) rite(q, () => act.fleetMove(q, q.planetId), false); })
         : link('ride', 'Ride Out', 'find a foe', 'var(--sky)', '#/atlas'),
@@ -461,9 +465,22 @@ export function hold(ctx: Ctx): Screen {
   window.addEventListener('resize', onResize);
 
   let toured = false;
+  /** Whose beasts stand on the isle and whose rites the Chronicle tells. */
+  let shownFor: string | null = null;
   function paint() {
     trackReading();
     const p = player();
+    // a warden gone (forgotten here or in another tab) or switched: the isle goes back to a stranger's, bare and
+    // unwarded, the choice is let go, and whoever comes next is set down quietly, as on a first look
+    if ((p?.playerId ?? null) !== shownFor) {
+      if (shownFor) {
+        sel = null; raiders = []; raidCheckAt = 0; first = true;
+        const isle = scene.get();
+        if (isle) { isle.sync([], true); isle.setWard(0); }
+      }
+      shownFor = p?.playerId ?? null;
+      chron.repaint();
+    }
     checkRaiders();
     keepFocus(el, () => { paintBanner(p); paintOmens(p); paintRoster(p); paintCard(p); paintRites(p); });
     // a warden's first time in their own Hold: a short look around, once the isle has woken

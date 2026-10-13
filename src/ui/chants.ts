@@ -5,6 +5,7 @@ import { pow, type PowTask } from '../pow/pow';
 import { txq, type TxJob } from '../wallet/queue';
 import { live } from '../chain/live';
 import { retell, retellError, bellsAsTime, agoMs } from '../lore';
+import { canRetry } from '../game/actions';
 
 const KIND: Record<PowTask['kind'], [string, string]> = {
   build: ['Summoning chant', 'var(--gold)'], mine: ['Delving chant', 'var(--root)'], refine: ['Brewing chant', '#7dffb0'], raid: ['Plunder chant', 'var(--ember)'],
@@ -62,12 +63,17 @@ export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max =
   const paint = (jobs: TxJob[]) => {
     last = jobs;
     clear(list);
-    // the same rite done again and again reads as one line with a count
+    // the same rite done again and again reads as one line with a count; so does the same refusal,
+    // however the rows between fell (eight taps on a full sky are one line, ×8, newest first)
     const sorted = jobs.filter(filter).slice().sort((a, b) => b.updatedAt - a.updatedAt);
     const shown: TxJob[] = [], times = new Map<TxJob, number>();
+    const keys = new Map<TxJob, string>();
+    const said = (j: TxJob) => { let k = keys.get(j); if (k == null) { k = j.label.replace(/ · chant of \d+$/, '') + (j.status === 'failed' ? '|' + retellError(j.error || '') : ''); keys.set(j, k); } return k; };
     for (const j of sorted) {
       const prev = shown[shown.length - 1];
-      if (prev && prev.status === j.status && prev.status === 'success' && prev.label.replace(/ · chant of \d+$/, '') === j.label.replace(/ · chant of \d+$/, '')) { times.set(prev, (times.get(prev) || 1) + 1); continue; }
+      const same = j.status === 'failed' ? shown.find((s) => s.status === 'failed' && said(s) === said(j))
+        : prev && prev.status === 'success' && j.status === 'success' && said(prev) === said(j) ? prev : undefined;
+      if (same) { times.set(same, (times.get(same) || 1) + 1); continue; }
       if (shown.length >= max) break;
       shown.push(j);
     }
@@ -81,11 +87,13 @@ export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max =
         h('span', null, h('span', null, retell(j.label).replace(/ · chant of \d+$/, '')), ' ', h('span', { style: { color } }, word), times.get(j) ? h('span', { class: 'herald-n', style: { marginLeft: '6px' } }, `×${times.get(j)}`) : null,
           j.status === 'waiting' && j.waitReason ? h('span', { class: 'faint' }, ` — ${retellError(j.waitReason)}`) : null,
           j.status === 'failed' && j.error ? h('span', { style: { color: 'var(--ember-ink)' } }, ` — ${retellError(j.error)}`) : null,
-          j.status === 'failed' ? h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: '6px', minHeight: '28px' }, onclick: () => txq.retry(j.id) }, 'Again') : null)));
+          // a stale refusal is only told: sent again blind, it could ride a new Wyrm to a plundered isle
+          j.status === 'failed' && canRetry(j) ? [' ', h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: '6px', minHeight: '28px' }, 'aria-label': `Again: ${retell(j.label).replace(/ · chant of \d+$/, '')}`, onclick: () => { if (canRetry(j)) txq.retry(j.id); else paint(last); } }, 'Again')] : null)));
     }
   };
   const off = txq.onChange(paint);
   // "just now" ages: refresh the times twice a minute
   const tick = setInterval(() => paint(last), 30_000);
-  return { el, dispose: () => { off(); clearInterval(tick); } };
+  // repaint: the filter's answer changed without the queue changing (whose rites these are)
+  return { el, repaint: () => paint(last), dispose: () => { off(); clearInterval(tick); } };
 }

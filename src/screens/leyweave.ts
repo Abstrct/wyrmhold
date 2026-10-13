@@ -1,13 +1,13 @@
 /* The Leyweave: where alpha becomes mana. Every coven's wellspring, the ley shrine your hold drinks
  * from, and your own tithes — all read live. Tithing and unbinding seal real rites. */
-import { h, clear, toast, confirmBox } from '../core/dom';
+import { h, clear, toast, confirmBox, keepFocus } from '../core/dom';
 import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar } from '../ui/frame';
 import { chroniclePanel } from '../ui/chants';
 import { lcd, big, type Grid, type RawInfusion, type RawReactor } from '../chain/lcd';
 import { guilds, type GuildEntry } from '../guild/directory';
-import { empire } from '../game/empire';
+import { empire, type PlayerState } from '../game/empire';
 import { wallet } from '../wallet/wallet';
 import { txq } from '../wallet/queue';
 import { covenColor, covenName, fmtAlpha, fmtMana, speak } from '../lore';
@@ -132,8 +132,15 @@ export function leyweave(ctx: Ctx): Screen {
       h('p', { class: 'eyebrow', style: { color } }, eyebrow), h('h3', { class: 'display' + (/^[\d.]/.test(title) ? ' num' : ''), style: { fontSize: '26px', marginTop: '6px' } }, title), ...body);
   }
 
+  // the page rebuilds as the ledger moves (every read of your warden): each part repaints only when
+  // what it says has changed, and keyboard focus survives it
+  const sigs: Record<string, string> = {};
+  /** One section repaints only when what it says has changed. */
+  const changed = (k: string, sig: string) => { if (sigs[k] === sig) return false; sigs[k] = sig; return true; };
+
   let reread = false;
-  function paint() {
+  function paint() { if (!left) keepFocus(el, paintNow); }
+  function paintNow() {
     const p = empire.commander;
     // the page can open before the warden is read: read the shrine again once they are
     if (p?.substationId && loaded && !shrine && !reread) {
@@ -142,32 +149,46 @@ export function leyweave(ctx: Ctx): Screen {
       const later = () => { if (left) return; clearTimeout(shrineLater); shrineLater = window.setTimeout(() => { reread = false; if (!left) paint(); }, 8000); };
       load().then(() => { if (!shrine) later(); }, later);
     }
-    clear(mine);
+    paintMine(p);
+    paintWells();
+  }
+
+  function paintMine(p: PlayerState | null) {
     if (!p) {
-      mine.append(card('No warden yet', 'Your leyweave', 'var(--violet)', [h('p', { class: 'muted' }, 'Swear the oath: your coven lends you its leyline the moment you are sworn.'), h('button', { type: 'button', class: 'btn gold', onclick: ctx.oath }, 'Swear the oath')]));
-    } else {
-      const cap = p.capacity + p.connectionCapacity, load = p.load + p.structsLoad;
-      const own = covens.get(p.guildId)?.chain?.primaryReactorId;
-      const tithed = tithes.reduce((a, t) => a + big(t.fuel), 0n);
-      mine.append(
-        card(cap >= load ? `${fmtMana(cap - load)} spare` : `${fmtMana(load - cap)} short`, 'Mana flow', 'var(--sky)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } }, p.online ? `Your beasts drink ${fmtMana(load)}; your leylines pour up to ${fmtMana(cap)}. ${fmtMana(cap - load)} is spare for new summonings.` : 'Your beasts drink more than you pour: they slumber until it fits.'),
-          h('span', { class: 'bar', style: { marginTop: '10px' } }, h('i', { style: { width: (cap > 0n ? Math.max(0, 100 - Math.min(100, Number(load * 100n / cap))) : 0) + '%', background: p.online ? 'var(--sky)' : 'var(--ember)' } }))]),
-        card(p.substationId ? 'Your coven’s shrine' : 'No shrine', 'Ley shrine', 'var(--verdigris)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } },
-          shrine ? `${shrine.connectionCount || '0'} holds drink here, each granted up to ${fmtMana(big(shrine.connectionCapacity))} mana.` : p.substationId ? 'Your hold drinks from it. Reading how many share it…' : 'Your hold drinks from no shrine.')]),
-        card(`${fmtAlpha(tithed)} α`, 'Your tithes', 'var(--gold)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } }, tithes.length ? `Resting in ${tithes.length} wellspring${tithes.length === 1 ? '' : 's'}.` : 'You have tithed nothing yet.'),
-          own ? h('p', { class: 'faint', style: { fontSize: '13px', margin: '6px 0 0' } }, 'Tithe to your coven’s wellspring below to raise your flow.') : '']),
-      );
-      const ctl = scene.get();
-      if (ctl) ctl.setRate(cap > 0n ? 0.4 + Math.min(2.6, Number(load * 100n / cap) / 40) : 0.2);
+      if (changed('mine', 'none')) { clear(mine); mine.append(card('No warden yet', 'Your leyweave', 'var(--violet)', [h('p', { class: 'muted' }, 'Swear the oath: your coven lends you its leyline the moment you are sworn.'), h('button', { type: 'button', class: 'btn gold', onclick: ctx.oath }, 'Swear the oath')])); }
+      return;
     }
-    clear(wellsBox);
-    if (!loaded) { wellsBox.append(h('p', { class: 'italic' }, 'Listening to the wellsprings…')); return; }
-    if (failed && !wells.length) { wellsBox.append(h('p', { class: 'muted' }, 'The wellsprings are not answering just now. ', h('button', { type: 'button', class: 'linkish', onclick: () => again() }, 'Try again'))); return; }
+    const cap = p.capacity + p.connectionCapacity, load = p.load + p.structsLoad;
+    const own = covens.get(p.guildId)?.chain?.primaryReactorId;
+    const tithed = tithes.reduce((a, t) => a + big(t.fuel), 0n);
+    const ctl = scene.get();
+    if (ctl) ctl.setRate(cap > 0n ? 0.4 + Math.min(2.6, Number(load * 100n / cap) / 40) : 0.2);
+    if (!changed('mine', JSON.stringify([String(cap), String(load), p.online, !!p.substationId, shrine && [shrine.connectionCount, shrine.connectionCapacity], String(tithed), tithes.length, !!own]))) return;
+    clear(mine);
+    mine.append(
+      card(cap >= load ? `${fmtMana(cap - load)} spare` : `${fmtMana(load - cap)} short`, 'Mana flow', 'var(--sky)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } }, p.online ? `Your beasts drink ${fmtMana(load)}; your leylines pour up to ${fmtMana(cap)}. ${fmtMana(cap - load)} is spare for new summonings.` : 'Your beasts drink more than you pour: they slumber until it fits.'),
+        h('span', { class: 'bar', style: { marginTop: '10px' } }, h('i', { style: { width: (cap > 0n ? Math.max(0, 100 - Math.min(100, Number(load * 100n / cap))) : 0) + '%', background: p.online ? 'var(--sky)' : 'var(--ember)' } }))]),
+      card(p.substationId ? 'Your coven’s shrine' : 'No shrine', 'Ley shrine', 'var(--verdigris)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } },
+        shrine ? `${shrine.connectionCount || '0'} holds drink here, each granted up to ${fmtMana(big(shrine.connectionCapacity))} mana.` : p.substationId ? 'Your hold drinks from it. Reading how many share it…' : 'Your hold drinks from no shrine.')]),
+      card(`${fmtAlpha(tithed)} α`, 'Your tithes', 'var(--gold)', [h('p', { class: 'muted', style: { margin: '8px 0 0' } }, tithes.length ? `Resting in ${tithes.length} wellspring${tithes.length === 1 ? '' : 's'}.` : 'You have tithed nothing yet.'),
+        own ? h('p', { class: 'faint', style: { fontSize: '13px', margin: '6px 0 0' } }, 'Tithe to your coven’s wellspring below to raise your flow.') : '']),
+    );
+  }
+
+  function paintWells() {
     const me = empire.commander;
+    const ourWell = me ? covens.get(me.guildId)?.chain?.primaryReactorId : undefined;
+    const state = !loaded ? 'listening' : failed && !wells.length ? 'silent' : 'wells';
+    // your warden is read again every few bells; the wells only change when the wellsprings or your tithes do
+    const sig = JSON.stringify([state, !!me, ourWell, wells.map((w) => [w.r.id, w.r.guildId, w.r.validator, name(w.r.guildId), String(big(w.grid.fuel)), w.commission, String(big(w.grid.capacity) || big(w.grid.power)), String(big(tithes.find((t) => t.destinationId === w.r.id)?.fuel))])]);
+    if (!changed('wells', sig)) return;
+    clear(wellsBox);
+    if (state === 'listening') { wellsBox.append(h('p', { class: 'italic' }, 'Listening to the wellsprings…')); return; }
+    if (state === 'silent') { wellsBox.append(h('p', { class: 'muted' }, 'The wellsprings are not answering just now. ', h('button', { type: 'button', class: 'linkish', onclick: () => again() }, 'Try again'))); return; }
     for (const w of wells) {
       const color = covenColor(w.r.guildId);
       const mineHere = tithes.find((t) => t.destinationId === w.r.id);
-      const ours = me && covens.get(me.guildId)?.chain?.primaryReactorId === w.r.id;
+      const ours = ourWell === w.r.id;
       wellsBox.append(h('div', { class: 'card-btn', style: { cursor: 'default', borderColor: ours ? 'rgba(232,200,114,.6)' : undefined } },
         h('span', { class: 'row between' }, h('b', null, name(w.r.guildId)), h('span', { class: 'gem', style: { background: color, boxShadow: `0 0 10px ${color}` } })),
         ours ? h('span', { style: { fontSize: '12.5px', color: 'var(--gold)' } }, 'Your coven’s wellspring') : '',
@@ -176,8 +197,8 @@ export function leyweave(ctx: Ctx): Screen {
         h('span', { class: 'mono', style: { fontSize: '13px', color: 'var(--sky)' } }, `${fmtMana(big(w.grid.capacity) || big(w.grid.power))} mana poured`),
         mineHere ? h('span', { style: { fontSize: '13px', color: 'var(--gold)' } }, `Your tithe: ${fmtAlpha(big(mineHere.fuel))} α`) : '',
         h('span', { class: 'row', style: { marginTop: '4px' } },
-          h('button', { type: 'button', class: 'btn small gold', 'data-tut': ours || (!me && w === wells[0]) ? 'tithe' : null, 'aria-label': `Tithe to ${name(w.r.guildId)}`, onclick: () => titheDialog(w) }, 'Tithe'),
-          mineHere ? h('button', { type: 'button', class: 'btn small ghost', 'aria-label': `Unbind your tithe from ${name(w.r.guildId)}`, onclick: () => titheDialog(w, true) }, 'Unbind') : '')));
+          h('button', { type: 'button', class: 'btn small gold', 'data-key': 'tithe:' + w.r.id, 'data-tut': ours || (!me && w === wells[0]) ? 'tithe' : null, 'aria-label': `Tithe to ${name(w.r.guildId)}`, onclick: () => titheDialog(w) }, 'Tithe'),
+          mineHere ? h('button', { type: 'button', class: 'btn small ghost', 'data-key': 'unbind:' + w.r.id, 'aria-label': `Unbind your tithe from ${name(w.r.guildId)}`, onclick: () => titheDialog(w, true) }, 'Unbind') : '')));
     }
   }
 

@@ -201,6 +201,45 @@ export default async function (t, ctx) {
     expect.noErrors(page.errors(ALLOW), 'console');
   });
 
+  // 2026-10-13 playtest: one click on Seek Isle on a spent isle threw away a Dawn Cauldron, a Ward Lantern
+  // and a Thunder Spire, while the only confirm (shown when the ground still held wildroot) was one the
+  // ledger would refuse anyway, and read the marrow left as if it were the warden's stores
+  await t.test('Seek a new isle always asks: marrow is not stores, the hallows lost are named, and staying is the bright answer', 'S1', async (c) => {
+    const dialog = () => page.eval(`const v = document.querySelector('.veil [role=dialog]'); return v && { title: v.querySelector('h2').textContent, text: v.innerText, buttons: [...v.querySelectorAll('button')].map((b) => ({ t: b.textContent, cls: b.className })), focus: document.activeElement && document.activeElement.textContent }`);
+    const seekJobs = () => page.eval(`(await import('/src/wallet/queue.ts')).txq.jobs.filter((j) => j.msgs.some((m) => /PlanetExplore/.test(m.typeUrl))).length`);
+    const w = ctx.sky.w, spent = ctx.sky.spent;
+    try {
+      // the menagerie's ground still holds 3 sheaves, and 2 lie in its stores: the ledger would refuse
+      await openHold();
+      await page.clickSel('nav.rites .rite', { text: 'Seek Isle' });
+      await page.waitFor(`document.querySelector('.veil [role=dialog]')`, { what: 'the Seek dialog' });
+      let d = await dialog();
+      expect.ok(/not dug out/.test(d.title), 'an isle with marrow left cannot be left yet', d.title);
+      expect.ok(/3 sheaves of wildroot/.test(d.text) && /marrow left in the isle, not the 2 sheaves in your stores/.test(d.text), 'the marrow is told apart from the stores', d.text);
+      expect.eq(d.buttons.length, 1, 'only the way back is offered', d.buttons);
+      await page.screenshot(c.evidencePath('seek-not-dug-out.png'));
+      await page.key('Escape'); await sleep(200);
+      expect.eq(await page.eval(`document.querySelectorAll('.veil').length`), 0, 'Escape closes it');
+      // a spent isle with a Root Delver and a Dawn Cauldron on it
+      w.anyAddressPlayer = spent.pid;
+      await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: spent.pid });
+      await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length >= 3`, { what: 'Ashen’s roster', timeout: 40000 }); await sleep(800);
+      await page.clickSel('nav.rites .rite', { text: 'Seek Isle' });
+      await page.waitFor(`document.querySelector('.veil [role=dialog]')`, { what: 'the Seek confirm' });
+      d = await dialog();
+      expect.includes(d.title, 'Seek a new isle', 'it asks');
+      expect.ok(/Lost with it: your (Root Delver and Dawn Cauldron|Dawn Cauldron and Root Delver)\./.test(d.text), 'the hallows lost are named', d.text);
+      expect.ok(/Coming with you: your warband/.test(d.text), 'what comes along is said', d.text);
+      const stay = d.buttons.find((b) => b.t === 'Stay'), go = d.buttons.find((b) => b.t !== 'Stay');
+      expect.ok(stay && /\bgold\b/.test(stay.cls) && go && /\bghost\b/.test(go.cls), 'staying is the bright button, seeking the quiet one', d.buttons);
+      expect.eq(d.focus, 'Stay', 'the focus waits on staying');
+      await page.screenshot(c.evidencePath('seek-confirm.png'));
+      await page.key('Escape'); await sleep(200);
+      expect.eq(await page.eval(`document.querySelectorAll('.veil').length`), 0, 'Escape closes it');
+      expect.eq(await seekJobs(), 0, 'Escape answers "stay": no seek was sent');
+    } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
+  });
+
   await t.test('a beast of a kind the catalogue does not know neither crashes nor shows a number for a name', 'S1', async (c) => {
     await openGame(page, ctx.app.url, '#/hold/' + ctx.sky.strange.pid);
     await awake(page);

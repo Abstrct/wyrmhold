@@ -16,7 +16,7 @@ export interface Lore { name: string; epithet: string; tale: string }
 export const BEASTS: Record<number, Lore> = {
   1: { name: 'Elder Wyrm', epithet: 'Heart of the Hold', tale: 'Hatched upon your isle and bound to you alone. The only beast that soars between realms, and it must stand in a realm to strike there. Every raid rides on its back; fell a raider’s Wyrm and the raid is broken.' },
   2: { name: 'Void Behemoth', epithet: 'Whale of the empty dark', tale: 'A leviathan that swims between stars. Its low song cracks stone-skin outright, and a second, seeking cry reaches anything in Starfall.' },
-  3: { name: 'Comet Sprite', epithet: 'A spark with a grudge', tale: 'A mote of falling star that never learned to stop. Its tail-lash always lands at least one blow.' },
+  3: { name: 'Comet Sprite', epithet: 'A spark with a grudge', tale: 'A mote of falling star that never learned to stop. Its bolt is a seeking one, so Glamour turns most of them aside.' },
   4: { name: 'Moth Galleon', epithet: 'Lantern-ship of the high dark', tale: 'Black oak carried by four great moth wings. The only starfarer that stoops to strike the Skies.' },
   5: { name: 'Harpy', epithet: 'Cheapest talons aloft', tale: 'Shrieking, spiteful and quick to bind. Glamour turns aside two of every three seeking blows: strike it with a flung one.' },
   6: { name: 'Shade Owl', epithet: 'Hunts by not being seen', tale: 'Veiled, it can only be struck from its own realm. Striking drops the veil.' },
@@ -63,6 +63,59 @@ export const mana = (mw: bigint | number) => Math.round(Number(mw) / 1000);
 export const fmtMana = (mw: bigint | number) => mana(mw).toLocaleString('en-US');
 export const alpha = (ualpha: bigint) => Number(ualpha) / 1e6;
 export const fmtAlpha = (ualpha: bigint) => alpha(ualpha).toLocaleString('en-US', { maximumFractionDigits: 3 });
+/** "1 sheaf", "12 sheaves". */
+export const sheaves = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'sheaf' : 'sheaves'}`;
+
+/* The ledger's state refusals (x/structs/types/errors_structured.go) name a state and a rite by code:
+ * "struct (5-3) is offline but must be online for readiness_check". These say them as a warden would. */
+const BEAST_IS: Record<string, string> = {
+  destroyed: 'has fallen', building: 'is still being summoned', built: 'is already summoned', online: 'is awake', offline: 'slumbers',
+  hidden: 'is veiled', visible: 'is not veiled', not_mining: 'is not delving', not_refining: 'is not brewing', not_defending: 'guards nothing',
+};
+const BEAST_DO: Record<string, string> = {
+  activation: 'awaken', activate: 'awaken', deactivate: 'slumber', readiness_check: 'act', move: 'soar', defense_set: 'guard', defense_clear: 'stand down',
+  generator_infuse: 'be fed', trash: 'be banished', build_complete: 'finish its summoning', build_cancel: 'have its summoning called off',
+  stealth_activate: 'veil itself', stealth_deactivate: 'drop its veil', ore_mine: 'delve', ore_refine: 'brew',
+};
+function beastState(_m: string, was: string, _need: string, rite: string) {
+  // the same refusal may come back already half in the realm's words
+  const now = ({ slumbering: 'offline', awake: 'online' } as Record<string, string>)[was] || was;
+  // a switch already thrown: "awake but must be slumbering to awaken" means it is awake already
+  if ((rite === 'activation' || rite === 'activate') && now === 'online') return 'it is already awake';
+  if (rite === 'deactivate' && now === 'offline') return 'it is already slumbering';
+  if (rite === 'stealth_activate' && now === 'hidden') return 'it is already veiled';
+  if (rite === 'stealth_deactivate' && now === 'visible') return 'it is not veiled';
+  if (now === 'built' && rite.startsWith('build_')) return 'its summoning is already complete';
+  return `that beast ${BEAST_IS[now] || 'is not ready'}, so it cannot ${BEAST_DO[rite] || 'do that'}`;
+}
+/** An isle's sky holds this many raiders at once (the ledger's visitor list, msg_server_fleet_move.go). */
+export const skyHolds = (cap: number) => (cap <= 1 ? 'only one raider may hang there at a time' : `no more than ${cap} raiders may hang there at once`);
+const ID = String.raw`(?: \(?\d+-\d+\)?)?`;
+const STATE_WORDS: [RegExp, string | ((...a: string[]) => string)][] = [
+  // riding out
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} cannot move while queue_full\b`, 'gi'), `another warband already hangs over that isle, and ${skyHolds(1)}. Ride out again once it leaves`],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} cannot move while not_active\b`, 'gi'), 'that isle is abandoned: its warden has sought a new one, and nothing there can be raided'],
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} needs an online command struct before deploy\b`, 'gi'), 'your Elder Wyrm slumbers: wake it to ride out'],
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} needs a command struct before deploy\b`, 'gi'), 'your warband has no Elder Wyrm: no raid rides without one'],
+  // plunder
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} cannot raid_complete while on_station\b`, 'gi'), 'your warband is home: plunder needs it in their sky'],
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} cannot raid_complete while not_first_in_queue\b`, 'gi'), 'another warband reached that isle first, and only the first in its sky may plunder. Yours waits its turn'],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} cannot raid_complete while not_active\b`, 'gi'), 'their warden has left that isle for a new one: there is nothing there to plunder'],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} cannot raid_complete while raid_clock_unset\b`, 'gi'), 'the plunder clock over that isle has not started yet. Try again in a moment'],
+  // summoning, seeking, delving and brewing
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} cannot build while away\b`, 'gi'), 'your warband is abroad: summonings need it home'],
+  [new RegExp(String.raw`\b(?:fleet|warband)${ID} cannot explore while away\b`, 'gi'), 'your warband is abroad: bring it home before you seek a new isle'],
+  [new RegExp(String.raw`\bnew (?:planet|isle) cannot be explored while current (?:planet|isle)${ID} has ore available for mining\b`, 'gi'), 'your isle’s ground still holds wildroot: a warden may seek a new isle only once the old one is dug out'],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} cannot mine while under_raid\b`, 'gi'), 'raiders hang over your isle: no delving until they leave'],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} cannot refine while under_raid\b`, 'gi'), 'raiders hang over your isle: no brewing until they leave'],
+  [new RegExp(String.raw`\b(?:planet|isle)${ID} is already complete, move on bud, no work to be done here\b`, 'gi'), 'that isle is spent and left behind: there is no work to be done there'],
+  [new RegExp(String.raw`\b(?:struct|beast)${ID} is (\w+) but must be (\w+) (?:for|to) (\w+)`, 'gi'), beastState],
+];
+/** Any code that slips past every sentence still reads as words (these run last). */
+const STATE_CODES: [RegExp, string][] = [
+  [/\bqueue_full\b/g, 'a full sky'], [/\bnot_first_in_queue\b/g, 'another warband first in line'], [/\bnot_active\b/g, 'abandoned'],
+  [/\braid_clock_unset\b/g, 'no plunder clock yet'], [/\bon_station\b/g, 'at home'], [/\braid_complete\b/g, 'plunder'], [/\breadiness_check\b/g, 'act'],
+];
 
 /** Every sentence the warden reads goes through here: the realm's words for the ledger's. */
 export function speak(text: string): string {
@@ -71,6 +124,8 @@ export function speak(text: string): string {
   const R: [RegExp, string | ((...a: string[]) => string)][] = [
     // the node's wrappers around a refusal say nothing to a warden: keep only the reason inside them
     [/\brpc error: code = \w+ desc = /gi, ''], [/\bfailed to execute message; message index: \d+:\s*/gi, ''],
+    // the ledger's state codes, before any of their words are renamed
+    ...STATE_WORDS,
     [/^Move (.+?) → (?:fleet|planet|warband|isle) (space|air|land|water) \d+/, (_m: string, who: string, a: string) => `${who} soars into ${({ space: 'Starfall', air: 'the Skies', land: 'the Wilds', water: 'the Deeps' } as Record<string, string>)[a]}`],
     // the Soar rite's own label ("Move Elder Wyrm to the space realm")
     [/^Move (.+?) to the (space|air|land|water) realm$/, (_m: string, who: string, a: string) => `${who} soars into ${({ space: 'Starfall', air: 'the Skies', land: 'the Wilds', water: 'the Deeps' } as Record<string, string>)[a]}`],
@@ -105,7 +160,7 @@ export function speak(text: string): string {
     [/ · proof (\d+)$/, ' · chant of $1'], [/\bproof of work\b/gi, 'chant'], [/\bproofs?\b/gi, 'chant'], [/\bhash(es|ing)?\b/gi, 'chant'],
     [/\bcommand (struct|ship)\b/gi, 'Elder Wyrm'], [/\bcommanders?\b/gi, 'warden'], [/\bplayers?\b/gi, 'warden'],
     [/\bplanets?\b/gi, 'isle'], [/\bfleets?\b/gi, 'warband'], [/\bguilds?\b/gi, 'coven'],
-    [/\bstructs\b/gi, 'beasts'], [/\bstruct\b/gi, 'beast'], [/(\d[\d,]*) ore\b/gi, '$1 sheaves of wildroot'], [/\bore\b/gi, 'wildroot'],
+    [/\bstructs\b/gi, 'beasts'], [/\bstruct\b/gi, 'beast'], [/(\d[\d,]*) ore\b/gi, (_m: string, n: string) => `${n} ${n === '1' ? 'sheaf' : 'sheaves'} of wildroot`], [/\bore\b/gi, 'wildroot'],
     [/\bcharge\b/gi, 'breath'], [/\bcapacity\b/gi, 'mana flow'], [/\bgrid\b/gi, 'leyweave'], [/\bpower\b/gi, 'mana'], [/\benergy\b/gi, 'mana'],
     [/\bshields?\b/gi, 'ward'], [/\bsubstations?\b/gi, 'ley shrine'], [/\breactors?\b/gi, 'wellspring'],
     [/\binfus(e|ed|ion|ing)\b/gi, 'tithe'], [/\bdefus(e|ed|ion|ing)\b/gi, 'unbinding'],
@@ -113,11 +168,8 @@ export function speak(text: string): string {
     [/\brecovery phrase\b/gi, 'soul-words'], [/\bmnemonic\b/gi, 'soul-words'], [/\bwallet\b/gi, 'soulstone'],
     [/\btx(n|s)?\b/gi, 'rite'], [/\btransactions?\b/gi, 'rite'], [/\bsign(ed|ing)?\b/gi, 'seal$1'],
   ];
-  for (const [re, to] of R) s = s.replace(re, to as string);
-  // the ledger's switch words, said as the warden would
-  s = s.replace(/\bbeast is slumbering but must be awake (?:for|to) deactivate\b/gi, 'it is already slumbering')
-    .replace(/\bbeast is awake but must be slumbering (?:for|to) activate\b/gi, 'it is already awake')
-    .replace(/\bfor deactivate\b/gi, 'to slumber').replace(/\bfor activate\b/gi, 'to awaken');
+  for (const [re, to] of [...R, ...STATE_CODES]) s = s.replace(re, to as string);
+  s = s.replace(/\bfor deactivate\b/gi, 'to slumber').replace(/\bfor activate\b/gi, 'to awaken');
   return s.replace(/\b([Tt])he The /g, '$1he ').replace(/\ba The /g, 'the ').replace(/\ba (isle|alpha|Elder|ember|ally)/g, 'an $1');
 }
 export const retell = speak;

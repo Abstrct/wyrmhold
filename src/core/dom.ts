@@ -68,15 +68,22 @@ export function toast(text: string, kind: Kind = '', ms = 3600, action?: { label
   heralds.set(key, { el, n: 1, timer: retire(el) });
 }
 
-export function confirmBox(title: string, text: string, ok = 'Confirm', tone: 'player' | 'enemy' = 'enemy'): Promise<boolean> {
+/** Ask before a rite. `stay` names the safe answer ("Not now" unless given). With `safeFirst` the safe
+ * answer is the bright button and holds the focus, and the rite is the quiet one: for a choice that loses
+ * something for good. With `ok` null the box only tells, and the safe answer is the only one. Escape
+ * always answers safe (main.ts looks for data-dismiss). */
+export function confirmBox(title: string, text: string | string[], ok: string | null = 'Confirm', tone: 'player' | 'enemy' = 'enemy', o: { stay?: string; safeFirst?: boolean } = {}): Promise<boolean> {
   return new Promise((resolve) => {
-    const done = (v: boolean) => { veil.remove(); resolve(v); };
+    const done = (v: boolean) => { veil.remove(); opener?.focus?.({ preventScroll: true }); resolve(v); };
+    const opener = document.activeElement as HTMLElement | null;
+    const bright = !!o.safeFirst || ok == null;
+    const stay = h('button', { type: 'button', class: bright ? 'btn gold' : 'btn ghost', 'data-dismiss': '', onclick: () => done(false) }, speak(o.stay || 'Not now'));
+    const go = ok == null ? null : h('button', { type: 'button', class: bright ? 'btn ghost' : `btn ${tone === 'enemy' ? 'ember' : 'gold'}`, onclick: () => done(true) }, speak(ok));
     const veil = h('div', { class: 'veil' },
       h('section', { class: 'scroll oath', role: 'dialog', 'aria-modal': 'true', 'aria-label': speak(title) },
-        h('h2', null, speak(title)), h('p', null, speak(text)),
-        h('div', { class: 'row end' },
-          h('button', { type: 'button', class: 'btn ghost', onclick: () => done(false) }, 'Not now'),
-          h('button', { type: 'button', class: `btn ${tone === 'enemy' ? 'ember' : 'gold'}`, onclick: () => done(true) }, speak(ok)))));
+        h('h2', null, speak(title)), ...(Array.isArray(text) ? text : [text]).map((t) => h('p', null, speak(t))),
+        h('div', { class: 'row end' }, ...(bright ? [go, stay] : [stay, go]))));
     document.body.append(veil);
+    if (bright) stay.focus({ preventScroll: true });
   });
 }

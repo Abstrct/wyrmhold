@@ -44,6 +44,50 @@ export default async function (t, ctx) {
     const bad = out.filter(([, s]) => forbidden.test(s) || ids.test(s)).map((b) => `${b[0]} → ${b[1]}`);
     expect.eq(bad.length, 0, 'sentences that still speak the engine’s tongue', bad);
   });
+  // 2026-10-13 playtest: riders read "warband cannot move while queue_full". Every state refusal in the
+  // ledger's keeper (errors_structured.go: fleet, planet and struct states) is said in words
+  await t.test('the ledger’s state refusals (queue_full, not_active, raid_clock_unset…) come out as plain words', 'S2', async () => {
+    const raw = ['rpc error: code = Unknown desc = failed to execute message; message index: 0: fleet (9-12) cannot move while queue_full', 'planet (2-7) cannot move while not_active',
+      'fleet (9-3) cannot raid_complete while on_station', 'fleet (9-3) cannot raid_complete while not_first_in_queue', 'planet (2-7) cannot raid_complete while not_active',
+      'planet (2-7) cannot raid_complete while raid_clock_unset', 'planet (2-7) cannot raid_complete while shields_active', 'fleet (9-3) cannot build while away', 'fleet (9-3) cannot explore while away',
+      'new planet cannot be explored while current planet (2-7) has ore available for mining', 'planet (2-7) cannot mine while under_raid', 'planet (2-7) cannot refine while under_raid',
+      'planet (2-7) is already complete, move on bud, no work to be done here', 'struct (5-3) is offline but must be online for readiness_check', 'struct (5-3) is destroyed but must be active for trash',
+      'struct (5-3) is online but must be offline for activation', 'struct (5-3) is not_defending but must be defending for defense_clear', 'struct (5-3) is built but must be building for build_cancel',
+      'fleet (9-3) needs a command struct before deploy', 'fleet (9-3) needs an online command struct before deploy'];
+    const out = await L(`${JSON.stringify(raw)}.map((s) => [s, lore.speak(s), lore.speak(lore.speak(s))])`);
+    const forbidden = /\b(planet|fleet|struct|explore|build|online|offline|mine|deploy|bud)\b|\b[a-z]+_[a-z_]+\b|\b\d+-\d+\b/i;
+    const bad = out.filter(([, s]) => forbidden.test(s)).map((b) => `${b[0]} → ${b[1]}`);
+    expect.eq(bad.length, 0, 'refusals that still speak in codes', bad);
+    const unstable = out.filter(([, a, b]) => a !== b).map((b) => `${b[1]} → ${b[2]}`);
+    expect.eq(unstable.length, 0, 'retelling a retold refusal changes it', unstable);
+    expect.ok(/already hangs over that isle/.test(out[0][1]) && /once it leaves/.test(out[0][1]), 'a full sky says what happened and what to do', out[0][1]);
+  });
+  await t.test('a ride into a full sky is warned of before it rides; one already there is not', 'S2', async () => {
+    await m('/src/realm.ts');
+    const r = await L(`const R = window.__m['/src/realm.ts'];
+      const isle = (count, extra = '') => ({ Planet: { id: '2-9', locationListCount: String(count), locationListExtra: extra } });
+      const rider = { planetId: '2-1', fleet: { status: 'onStation', locationId: '2-1' } };
+      return [R.skyFull(isle(0), rider), R.skyFull(isle(1), rider), R.skyFull(isle(1, '1'), rider), R.skyFull(isle(1), { planetId: '2-1', fleet: { status: 'away', locationId: '2-9' } }), R.skyFull(isle(1), { planetId: '2-9', fleet: null }), R.skyFull(null, rider)]`);
+    expect.eq(r[0], null, 'an empty sky');
+    expect.ok(typeof r[1] === 'string' && /only one raider/.test(r[1]) && !/\b\d+-\d+\b|queue/.test(r[1]), 'a full sky is warned of, plainly', r[1]);
+    expect.eq(r[2], null, 'an isle with an extra place still has room');
+    expect.eq(r[3], null, 'a warband already there');
+    expect.eq(r[4], null, 'riding home');
+    expect.eq(r[5], null, 'an isle not read yet');
+  });
+  // 2026-10-13 playtest: an "Again" tapped twenty minutes late rode a new Wyrm to an isle already plundered
+  await t.test('"Again" is offered only for a fresh refusal, and never to seek a new isle blind', 'S1', async () => {
+    const r = await L(`const now = Date.now(), job = (o) => ({ id: 'x', status: 'failed', updatedAt: now - 5000, msgs: [{ typeUrl: '/structs.structs.MsgFleetMove', value: {} }], ...o });
+      return [actions.canRetry(job({})), actions.canRetry(job({ updatedAt: now - actions.AGAIN_MS - 1000 })), actions.canRetry(job({ status: 'success' })), actions.AGAIN_MS]`);
+    expect.eq(r[0], true, 'a refusal just heard may be tried again');
+    expect.eq(r[1], false, 'an old one may not');
+    expect.eq(r[2], false, 'only a failure');
+    expect.lte(r[3], 5 * 60_000, 'the window is short');
+  });
+  await t.test('one sheaf is a sheaf', 'S3', async () => {
+    const r = await L(`[lore.sheaves(1), lore.sheaves(2), lore.sheaves(1200), lore.speak('Raiders took 1 ore'), lore.speak('Raiders took 3 ore')]`);
+    expect.eq(JSON.stringify(r), JSON.stringify(['1 sheaf', '2 sheaves', '1,200 sheaves', 'Raiders took 1 sheaf of wildroot', 'Raiders took 3 sheaves of wildroot']), 'sheaves');
+  });
   await t.test('the tongue never doubles articles or capitals', 'S3', async () => {
     const out = await L(`['The Build Ore Extractor', 'a Explore', 'Build The Tank', 'a energy'].map((s) => lore.speak(s))`);
     for (const s of out) expect.ok(!/\b(the The|a The|a isle|a alpha)\b/.test(s), 'clean articles: ' + s);

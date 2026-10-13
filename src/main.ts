@@ -16,6 +16,7 @@ import { mountGuide } from './ui/guide';
 import { guardTheVeil } from './ui/veilguard';
 import { watchOmens, proclaim } from './ui/omens';
 import { takeClaim } from './core/claims';
+import { canRetry } from './game/actions';
 import type { Screen, Ctx } from './screens/types';
 
 const MAKERS: Record<string, () => Promise<(ctx: Ctx) => Screen>> = {
@@ -74,7 +75,8 @@ txq.onSettled((j) => {
   else if (j.status === 'failed' && takeClaim(j.id)) return;
   // a refused plunder chant is kept and spoken again by the chant engine; "Again" would only repeat it
   else if (j.status === 'failed' && j.source === 'pow' && j.msgs.some((m) => /PlanetRaidComplete$/.test(m.typeUrl))) return;
-  else if (j.status === 'failed') toast(retell(j.label).replace(/ · chant of \d+$/, '') + ' failed: ' + retellError(j.error || 'the ledger refused'), 'enemy', 7000, { label: 'Again', run: () => txq.retry(j.id) });
+  // "Again" only while the refusal is fresh and the rite still makes sense (see canRetry)
+  else if (j.status === 'failed') toast(retell(j.label).replace(/ · chant of \d+$/, '') + ' failed: ' + retellError(j.error || 'the ledger refused'), 'enemy', 7000, canRetry(j) ? { label: 'Again', run: () => { if (canRetry(j)) txq.retry(j.id); } } : undefined);
 });
 
 /* Escape closes the topmost dialog, the way a warden expects. A dialog with its own "Not now" or close
@@ -84,7 +86,8 @@ document.addEventListener('keydown', (e) => {
   const veils = document.querySelectorAll('.veil');
   const veil = veils[veils.length - 1] as HTMLElement | undefined;
   if (!veil || veil.querySelector('#oath-title')) return;
-  const btn = veil.querySelector<HTMLElement>('button[aria-label="Close"], .btn.ghost');
+  // the safe answer, wherever it sits: a confirm may make it the bright button and the rite the quiet one
+  const btn = veil.querySelector<HTMLElement>('[data-dismiss]') || veil.querySelector<HTMLElement>('button[aria-label="Close"], .btn.ghost');
   if (btn) btn.click(); else veil.remove();
 });
 
