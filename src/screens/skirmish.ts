@@ -22,7 +22,7 @@ import { live } from '../chain/live';
 import { pow } from '../pow/pow';
 import { typeOf, type Ambit } from '../data/catalogue';
 import { REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, bellsAsTime, retellError } from '../lore';
-import { playerName, raidersAt, realmOf } from '../realm';
+import { playerName, raidersAt, realmOf, skyFull } from '../realm';
 import { alive, forecast, guardsOf, inRealm, isWyrm, moves, pct, reach, readBlow, tellBlow, wardKeeper, wisest, wyrmOf, type Blow, type Forecast, type Move } from '../game/war';
 
 type Side = 'ours' | 'theirs';
@@ -226,6 +226,8 @@ export function skirmish(ctx: Ctx): Screen {
   function rideOut() {
     const p = me(), f = foe();
     if (!p || !f) return;
+    const full = skyFull(f.planet, p);
+    if (full) { say(full); return; }
     try { act.fleetMove(p, f.planetId); toast(`Your warband rides for ${playerName(f)}’s isle.`, 'player', 3000); } catch (e) { say(retellError((e as Error).message)); }
   }
   function rideHome() {
@@ -729,6 +731,8 @@ export function skirmish(ctx: Ctx): Screen {
     else if (won && won.pid === targetPid) { label = 'Go to your Hold'; sub = 'brew what you carried home'; disabled = false; }
     else if (!f) why = targetPid ? 'Reading their hold…' : 'Choose a foe in the Sky Atlas first.';
     else if (!inFight() && !(wyrmOf(p) && alive(wyrmOf(p)!) && wyrmOf(p)!.online)) { label = 'Ride out'; why = wyrmOf(p) && alive(wyrmOf(p)!) ? 'Your Elder Wyrm slumbers: wake it at your Hold to ride.' : 'No raid can ride without an Elder Wyrm: hatch a new one at your Hold.'; }
+    // their sky holds one raider at a time: say so before the ride, not after the ledger refuses it
+    else if (!inFight() && !guarding && skyFull(f.planet, p)) { label = 'Ride out'; why = skyFull(f.planet, p)!; }
     else if (!inFight() && guarding) { label = 'Setting the guard…'; sub = 'then ride out'; }
     else if (!inFight() && !unguardedOk && wyrmOf(p) && guardFor(p, wyrmOf(p)!)) { const g = guardFor(p, wyrmOf(p)!)!; label = 'Guard your Wyrm'; sub = `with your ${beastName(g.typeId)} · ${g.type!.defendChangeCharge} breath · then ride out`; disabled = false; }
     else if (!inFight() && armed?.key === 'ride' && Date.now() < armed.until) { label = 'Ride out anyway?'; sub = `your Elder Wyrm has ${wyrmOf(p)!.health} ${wyrmOf(p)!.health === 1 ? 'heart' : 'hearts'} · press again to ride`; disabled = false; }

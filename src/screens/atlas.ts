@@ -5,7 +5,7 @@ import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar, icon, ICON } from '../ui/frame';
 import { cursorTip } from '../ui/tip';
-import { omenSight, wardens, wardenName, type Sight, type Warden } from '../realm';
+import { omenSight, skyFull, wardens, wardenName, type Sight, type Warden } from '../realm';
 import { live } from '../chain/live';
 import { guilds, type GuildEntry } from '../guild/directory';
 import { empire } from '../game/empire';
@@ -143,6 +143,8 @@ export function atlas(ctx: Ctx): Screen {
           : h('a', { class: 'btn ember block', href: `#/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
         // a raid on an empty hold only breaks things: say so before the ride
         !you && sightOk && oreOf(w) === 0 ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Nothing unbrewed to plunder there right now. Amber isles hold a prize.') : '',
+        // their sky holds one raider at a time: say so before the ride
+        !you && skyFull(empire.players.get(w.id)?.planet, me) ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px', color: 'var(--ember-ink)' } }, skyFull(empire.players.get(w.id)?.planet, me)) : '',
         you ? '' : h('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } },
           h('a', { class: 'btn small', href: `#/hold/${w.id}`, style: { flex: '1' } }, 'Scry their isle'),
           h('button', { type: 'button', class: 'btn small', style: { flex: '1' }, onclick: () => rideOut(w) }, 'Just ride there')),
@@ -156,10 +158,12 @@ export function atlas(ctx: Ctx): Screen {
     const p = empire.commander;
     if (!p) { toast('Swear the oath first: you have no warband to ride.', 'warn', 5000, { label: 'Oath', run: ctx.oath }); return; }
     if (!wallet.unlocked) { toast('Your soulstone is sealed.', 'warn', 5000, { label: 'Unseal', run: ctx.oath }); return; }
+    const full = skyFull(empire.players.get(w.id)?.planet, p);
+    if (full) { toast(full, 'warn', 7000); return; }
     try {
       act.fleetMove(p, w.planetId);
       scene?.get()?.ride(sel);
-      toast(`Your warband rides for isle ${w.planetId}. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`#/skirmish/${w.id}`) });
+      toast(`Your warband rides for ${wardenName(w)}’s isle. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`#/skirmish/${w.id}`) });
     } catch (e) { toast(retellError((e as Error).message), 'enemy'); }
   }
 

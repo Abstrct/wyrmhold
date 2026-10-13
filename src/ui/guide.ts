@@ -98,7 +98,7 @@ const STEPS: Step[] = [
     do: 'In the Sky Atlas, choose an isle, press Raid this hold, then Ride out.',
     done: 'The wind is under you. Fell their Elder Wyrm, and your plunder chant breaks their ward.', test: (p) => !!flags.ride || p?.fleet?.status === 'away' },
   { id: 'strike', title: 'Strike', route: '#/skirmish', glow: 'unleash',
-    say: 'Read the odds before you swing. Whatever lives will answer, and guards step in front of what they guard.',
+    say: 'Read the odds before you swing. Most beasts that live will answer, and guards step in front of what they guard.',
     do: 'In Skirmish the wisest blow is chosen for you. Read what it will do, then press Unleash.',
     done: 'Blood in the clouds. You are a warden now, truly.', test: () => !!flags.strike },
 ];
@@ -228,6 +228,8 @@ function paint() {
   const pending = STEPS.filter((s) => !done.has(s.id));
   const cur = pending.find((s) => !s.slow && (!s.ready || s.ready(p))) ?? pending[0];
   const waiting = cur ? pending.filter((s) => s !== cur && STEPS.indexOf(s) < STEPS.indexOf(cur)) : [];
+  // one measure everywhere, the pill and the card alike: how many steps are walked. A step's place in
+  // the list would jump about, since slow steps are stepped past and some come undone (a Delver falls).
   const n = done.size;
   // Ysolde speaks in full only where her step is done; elsewhere she folds to a "Next" pill and
   // keeps clear of the controls.
@@ -243,7 +245,7 @@ function paint() {
   document.body.classList.toggle('has-pill', folded);
   clear(body);
   if (folded) {
-    body.append(h('button', { type: 'button', class: 'path-pill', onclick: () => { if (hidden()) setHidden(false); openHere = true; lastSig = ''; paint(); }, 'aria-label': 'Open the Warden’s Path' },
+    body.append(h('button', { type: 'button', class: 'path-pill', onclick: () => { if (hidden()) setHidden(false); openHere = true; lastSig = ''; paint(); }, 'aria-label': `Open the Warden’s Path: ${n} of ${STEPS.length} steps walked${cur ? `, next ${cur.title}` : ''}` },
       h('span', { class: 'mono' }, `${n}/${STEPS.length}`), cur ? h('span', null, h('span', { class: 'faint' }, 'Next: '), cur.title) : ' The Warden’s Path'));
     return;
   }
@@ -259,7 +261,7 @@ function paint() {
   if (recent) { flags['heard:' + recent.id] = true; save(); }
   body.append(
     h('div', { class: 'path-head' },
-      h('div', null, h('p', { class: 'eyebrow', style: { color: 'var(--gold)' } }, cur ? `The Warden’s Path · step ${STEPS.indexOf(cur) + 1} of ${STEPS.length}` : `The Warden’s Path · ${n} of ${STEPS.length}`),
+      h('div', null, h('p', { class: 'eyebrow', style: { color: 'var(--gold)' } }, `The Warden’s Path · ${n} of ${STEPS.length} walked`),
         h('h2', { class: 'display', style: { fontSize: '21px', marginTop: '3px' } }, cur ? cur.title : 'The path is walked')),
       h('button', { type: 'button', class: 'icon-btn', style: { width: '32px', height: '32px', fontSize: '14px' }, 'aria-label': 'Fold the guide away', title: 'Fold away', onclick: () => { if (openHere) { openHere = false; lastSig = ''; paint(); if (!panel?.classList.contains('min')) setHidden(true); } else setHidden(true); } }, '–')),
     h('div', { class: 'path-steps', 'aria-hidden': 'true' }, ...STEPS.map((s) => h('i', { class: done.has(s.id) ? 'on' : s === cur ? 'cur' : waiting.includes(s) ? 'wait' : '' }))),

@@ -1,10 +1,10 @@
 /* Reading the ledger as a realm: a warden's beasts and hallows on an isle, free summoning
  * circles (slots), and the wardens abroad. */
-import { LCD_URL, lcd, num, type RawPlayer } from './chain/lcd';
+import { LCD_URL, lcd, num, type PlanetFull, type RawFleet, type RawPlayer } from './chain/lcd';
 import type { OwnedStruct, PlayerState } from './game/empire';
 import { reservedSlots } from './game/actions';
 import { AMBIT_FLAG, AMBITS, type Ambit, type StructType } from './data/catalogue';
-import { REALM_OF_AMBIT, type Realm } from './lore';
+import { REALM_OF_AMBIT, skyHolds, type Realm } from './lore';
 
 export interface IsleUnit { id: string; type: number; realm?: Realm; offline?: boolean; building?: boolean; plot?: number }
 
@@ -84,6 +84,16 @@ export async function raidersAt(planet: { Planet: { id: string; owner: string; l
     id = f.locationListForward;
   }
   return out;
+}
+
+/** An isle's sky holds 1 + its extra places of foreign warbands at once (msg_server_fleet_move.go), and the
+ * ledger refuses a ride into a full one ("queue_full"). Why `rider` cannot ride there now, or null if it can. */
+export function skyFull(isle: PlanetFull | null | undefined, rider?: { planetId: string; fleet: RawFleet | null } | null): string | null {
+  if (!isle || isle.Planet.id === rider?.planetId) return null;
+  // a warband already in that sky is one of the raiders it holds
+  if (rider?.fleet?.status === 'away' && rider.fleet.locationId === isle.Planet.id) return null;
+  const cap = 1 + num(isle.Planet.locationListExtra);
+  return num(isle.Planet.locationListCount) >= cap ? `Another warband already hangs over that isle, and ${skyHolds(cap)}. You can ride out once it leaves.` : null;
 }
 
 /* ── Omen-sight: who holds wildroot unbrewed, and who has slept ─────── */
