@@ -9,6 +9,7 @@ import { playerName } from '../realm';
 import { BEASTS } from '../lore';
 import { typeOf } from '../data/catalogue';
 import { watchRaids } from './harm';
+import { knownName } from '../game/raidlog';
 
 interface RaidDetail { fleetId?: string; planetId?: string; status?: string; seized_ore?: string; seizedOre?: string }
 interface TheftDetail { victimPlayerId?: string; thiefPlayerId?: string; amount?: string }
@@ -64,7 +65,7 @@ function struckElsewhere(events: ChainTxEvent[]) {
     if (!shot || !d.attackerPlayerId || ids.has(d.attackerPlayerId)) continue;
     lastStruck = Date.now();
     const foe = empire.players.get(d.attackerPlayerId);
-    const by = foe ? `${playerName(foe)}’s warband` : 'A raider';
+    const by = foe ? `${playerName(foe)}’s warband` : knownName(d.attackerPlayerId) != null ? `${playerName({ name: knownName(d.attackerPlayerId) || '', playerId: d.attackerPlayerId })}’s warband` : 'A raider';
     const what = beastWord(shot.targetStructType);
     toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => { location.hash = `/skirmish/${d.attackerPlayerId}`; } });
     return;

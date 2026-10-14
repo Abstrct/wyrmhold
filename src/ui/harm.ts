@@ -291,6 +291,8 @@ function mountAlert() {
     if (s === sig) return;
     sig = s;
     el.hidden = quiet;
+    // the screens make room for it, as they do for Ysolde's pill
+    document.body.classList.toggle('raid-alert-up', !quiet);
     if (quiet) return;
     text.textContent = overhead.length > 1 ? `${listOf(names)} warbands hang over your isle.` : `${names[0]} warband hangs over your isle.`;
     defend.setAttribute('aria-label', `Defend your isle against ${names[0]} warband`);
