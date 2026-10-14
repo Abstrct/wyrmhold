@@ -28,8 +28,9 @@ export function worldView(screen: string, opts: { home?: () => void; homeLabel?:
   let on = remembered(screen);
   const subs = new Set<(on: boolean) => void>();
   const toggle = h('button', { type: 'button', class: 'btn small world-btn', 'aria-label': 'Look at the world', onclick: () => set(!on) });
-  const home = opts.home ? h('button', { type: 'button', class: 'btn small world-home', hidden: true, title: 'Back to the whole view', onclick: () => { opts.home!(); toggle.focus({ preventScroll: true }); } },
-    icon(WHOLE, 16), h('span', { class: 't' }, opts.homeLabel || 'Whole isle')) : null;
+  const homeLabel = opts.homeLabel || 'Whole isle';
+  const home = opts.home ? h('button', { type: 'button', class: 'btn small world-home', hidden: true, 'aria-label': homeLabel, title: 'Back to the whole view', onclick: () => { opts.home!(); toggle.focus({ preventScroll: true }); } },
+    icon(WHOLE, 16), h('span', { class: 't' }, homeLabel)) : null;
   const el = h('div', { class: 'world-ctl', role: 'group', 'aria-label': 'The world' }, home, toggle);
   function paint() {
     toggle.setAttribute('aria-pressed', String(on));

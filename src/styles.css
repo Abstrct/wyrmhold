@@ -987,6 +987,9 @@ body.world-view[data-route="skirmish"] .fc-act { margin-top: 0; flex-wrap: nowra
   body[data-route="hold"] .hud > :not(.topbar), body[data-route="skirmish"] .hud > :not(.topbar), body[data-route="atlas"] .hud > :not(.topbar), body[data-route="bestiary"] .hud > :not(.topbar) { width: var(--side-w); max-width: 100%; align-self: flex-end !important; margin-left: auto; flex: none; }
   body[data-route="hold"] .cols, body[data-route="skirmish"] .cols, body[data-route="atlas"] .cols, body[data-route="bestiary"] .cols { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 8px; min-height: 0; overflow: visible; }
   body[data-route="hold"] .cols > *, body[data-route="skirmish"] .cols > *, body[data-route="atlas"] .cols > *, body[data-route="bestiary"] .cols > * { flex: none !important; width: 100%; min-width: 0 !important; max-height: none !important; overflow: visible; }
+  /* the whole strip under the column (its gaps too) belongs to the panels: a drag there scrolls them, never the camera */
+  body[data-route="hold"] .hud::after, body[data-route="skirmish"] .hud::after, body[data-route="atlas"] .hud::after, body[data-route="bestiary"] .hud::after { content: ''; position: fixed; top: 0; bottom: 0; right: 0; width: calc(var(--side-w) + 20px); z-index: -1; pointer-events: auto; }
+  body.world-view .hud::after { display: none; }
   .hud .panel { padding: 12px 14px; }
   .hold-omens > * { font-size: 13.5px !important; }
   /* the Hold: the rites in one slim row near the top, then a few rows of the roster in their own box, then the

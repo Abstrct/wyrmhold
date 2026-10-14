@@ -119,11 +119,17 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     if (intro) { cur.dist *= 1.7; cur.el = Math.min(1.2, cur.el + 0.28); cur.az -= 0.45; }
     // one finger (or the mouse) turns the view; two fingers pinch to zoom; a tap picks
     var pts = new Map(), pinch = null, pinched = false;
+    // where the page scrolls under the sky (an upright phone, touch-action pan-y), an upright swipe belongs to the
+    // page: the camera only takes a finger that sets off sideways, and then only turns (it never tips into a bush)
+    var pageY = false, claimed = false, sx = 0, sy = 0;
     var span = function () { var a = Array.from(pts.values()); return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1; };
     function down(e) {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       try { canvas.setPointerCapture(e.pointerId); } catch (x) { }
-      if (pts.size === 1) { drag = true; pinched = false; px = e.clientX; py = e.clientY; moved = 0; }
+      if (pts.size === 1) {
+        drag = true; pinched = false; px = e.clientX; py = e.clientY; moved = 0;
+        pageY = e.pointerType === 'touch' && /pan-y/.test(getComputedStyle(canvas).touchAction || ''); claimed = !pageY; sx = sy = 0;
+      }
       else if (pts.size === 2) { pinch = { span: span(), dist: goal.dist }; pinched = true; idle = 0; }
     }
     function move(e) {
@@ -133,6 +139,11 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       if (!drag) return;
       var dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
       moved += Math.abs(dx) + Math.abs(dy);
+      if (pageY) {
+        sx += dx; sy += dy;
+        if (!claimed) { if (Math.abs(sx) + Math.abs(sy) < 10) return; if (Math.abs(sy) >= Math.abs(sx)) { drag = false; return; } claimed = true; dx = sx; }
+        dy = 0;
+      }
       goal.az -= dx * 0.006; goal.el = clamp(goal.el + dy * 0.004, o.minEl == null ? 0.02 : o.minEl, o.maxEl || 1.35);
       idle = 0;
       if (moved > 6) stray(true);
@@ -669,8 +680,10 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         follow = null;
         if (!selected) return;
         var u = units[selected], near = clamp(u.rad * 8, 16, 34);
-        // a flyer on its circle is followed; under reduced motion the eye holds still and takes in its whole circle
+        // a flyer on its circle (or a swimmer in the lake) is followed; under reduced motion the eye holds still
+        // and takes in the whole circle it travels
         if (u.orbit && still) orbit.to(new T.Vector3(0, u.orbit.y, 0), Math.max(near, u.orbit.r * 2.6));
+        else if (u.swim && still) orbit.to(new T.Vector3(I.lake.x, -0.9 + (u.mid || 0), I.lake.z), Math.max(near, u.swim.r * 3 + 10));
         else { orbit.to(centerOf(u), near); if (u.orbit || u.swim) follow = selected; }
       },
       focus: function (realm) {

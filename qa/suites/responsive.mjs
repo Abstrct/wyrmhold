@@ -176,6 +176,37 @@ export default async function (t, ctx) {
     expect.noErrors(page.errors(ALLOW), 'console');
   });
 
+  await t.test('touch: a drag on the panels scrolls them, never the camera; on an upright phone a swipe on the sky scrolls the page', 'S1', async () => {
+    const bad = [];
+    const strayed = () => page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().strayed`);
+    const swipe = (x, y, dy) => page.send('Input.synthesizeScrollGesture', { x, y, xDistance: 0, yDistance: -dy, gestureSourceType: 'touch', speed: 900 }).then(() => sleep(800));
+    // sideways: the panels' column, on a panel and on the gap between two of them
+    await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: PHONE_SIDE });
+    await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(1500);
+    for (const [where, probe] of [['a panel', `(() => { const r = document.querySelector('.roster-panel h2').getBoundingClientRect(); return { x: r.left + 20, y: r.top + 10 }; })()`], ['the gap under the rites', `(() => { const r = document.querySelector('nav.rites').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 4 }; })()`]]) {
+      await page.eval(`document.querySelector('.hud').scrollTop = 0`); await sleep(300);
+      const p = await page.eval(probe), top0 = await page.eval(`document.querySelector('.hud').scrollTop`);
+      await swipe(p.x, Math.min(p.y, 360), 160);
+      const top1 = await page.eval(`document.querySelector('.hud').scrollTop`);
+      if (top1 < top0 + 40) bad.push(`844×390: a drag on ${where} did not scroll the panels (${top0} → ${top1})`);
+      if (await strayed()) bad.push(`844×390: a drag on ${where} turned the camera`);
+    }
+    // upright: a vertical swipe on the window onto the sky scrolls the page rather than tipping the camera
+    await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: PHONE_UP });
+    await awake(page); await sleep(1500);
+    const w = await page.eval(`(() => { const r = document.querySelector('.isle-window').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.7 }; })()`);
+    await swipe(w.x, w.y, 200);
+    const y = await page.eval(`window.scrollY || document.scrollingElement.scrollTop`);
+    if (y < 40) bad.push(`390×844: a swipe up on the sky did not scroll the page (scrollY ${y})`);
+    if (await strayed()) bad.push('390×844: a swipe up on the sky tipped the camera');
+    // and a sideways drag on the sky still turns the isle
+    await page.eval(`window.scrollTo(0, 0)`); await sleep(400);
+    const w2 = await page.eval(`(() => { const r = document.querySelector('.isle-window').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.send('Input.synthesizeScrollGesture', { x: w2.x + 80, y: w2.y, xDistance: -160, yDistance: 0, gestureSourceType: 'touch', speed: 900 }); await sleep(800);
+    if (!(await strayed())) bad.push('390×844: a sideways drag on the sky no longer turns the isle');
+    expect.eq(bad.length, 0, 'drags that went to the wrong place', bad);
+  });
+
   await t.test('the Elder Wyrm card’s realm buttons are fully on screen and touchable at 1280×800 and 1180×820', 'S1', async (c) => {
     const bad = [];
     for (const vp of [{ width: 1280, height: 800 }, TABLET]) {
