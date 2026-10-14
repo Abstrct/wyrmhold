@@ -31,7 +31,7 @@ interface Told { blow: Blow; at: number; ours: boolean; fresh: boolean }
 export function skirmish(ctx: Ctx): Screen {
   const canvas = h('canvas');
   const tip = cursorTip(canvas);
-  const bar = topbar('#/skirmish', ctx.oath, { meters: true });
+  const bar = topbar('/skirmish', ctx.oath, { meters: true });
   const ours = h('aside', { class: 'glass panel scroll-y sk-ours', 'aria-label': 'Your warband' });
   const theirs = h('aside', { class: 'glass panel col-l scroll-y', 'aria-label': 'Their hold' });
   // the strike panel keeps its button between paints, so a click never lands on a control being replaced
@@ -202,7 +202,7 @@ export function skirmish(ctx: Ctx): Screen {
   function press() {
     const p = me(), f = foe();
     if (!p || !f) return;
-    if (won && won.pid === targetPid) { ctx.go('#/hold'); return; }
+    if (won && won.pid === targetPid) { ctx.go('/hold'); return; }
     if (!inFight()) {
       const w = wyrmOf(p), g = w && alive(w) && !unguardedOk ? guardFor(p, w) : null;
       if (g && w && !guarding) { guardWyrm(g, w); return; }
@@ -501,9 +501,9 @@ export function skirmish(ctx: Ctx): Screen {
           : { title: 'The ledger is not answering yet', line: 'Your warband appears the moment it does.', tone: 'calm', act: ['Try again', () => empire.refresh(wallet.active?.playerId)] });
       }
     } else if (won && won.pid === targetPid) {
-      lines.push({ step: 4, title: won.seized > 0 ? 'Raid won!' : 'Raid won, but the cupboard was bare', line: (won.seized > 0 ? `${won.seized === 1 ? 'A sheaf of wildroot rides' : `${won.seized} sheaves of wildroot ride`} home with you. Brew ${won.seized === 1 ? 'it' : 'them'} before anyone takes ${won.seized === 1 ? 'it' : 'them'} back.` : 'Their isle held nothing unbrewed this time.') + tale(), tone: 'gold', act: ['Go to your Hold', () => ctx.go('#/hold'), true] });
+      lines.push({ step: 4, title: won.seized > 0 ? 'Raid won!' : 'Raid won, but the cupboard was bare', line: (won.seized > 0 ? `${won.seized === 1 ? 'A sheaf of wildroot rides' : `${won.seized} sheaves of wildroot ride`} home with you. Brew ${won.seized === 1 ? 'it' : 'them'} before anyone takes ${won.seized === 1 ? 'it' : 'them'} back.` : 'Their isle held nothing unbrewed this time.') + tale(), tone: 'gold', act: ['Go to your Hold', () => ctx.go('/hold'), true] });
     } else if (!targetPid) {
-      lines.push({ step: 0, title: 'Choose a hold to raid', line: 'Wardens with wildroot left unbrewed are worth the ride. Find one in the Sky Atlas.', tone: 'calm', act: ['Open the Atlas', () => ctx.go('#/atlas'), true] });
+      lines.push({ step: 0, title: 'Choose a hold to raid', line: 'Wardens with wildroot left unbrewed are worth the ride. Find one in the Sky Atlas.', tone: 'calm', act: ['Open the Atlas', () => ctx.go('/atlas'), true] });
     } else if (!f) {
       lines.push({ step: 0, title: 'Scrying their hold…', line: 'Reading their beasts from the ledger.', tone: 'calm' });
     } else if (defending()) {
@@ -512,7 +512,7 @@ export function skirmish(ctx: Ctx): Screen {
     } else if (!oursAbroad() && (!myW || !alive(myW) || !myW.online)) {
       // a warband rides on its Elder Wyrm: without one awake, it cannot leave the isle
       const dead = !myW || !alive(myW);
-      lines.push({ step: 1, title: dead ? 'Your Elder Wyrm has fallen' : 'Your Elder Wyrm slumbers', line: (dead ? 'Every raid rides on its back. Hatch a new one at your Hold, then come back for them.' : 'A warband rides on its Wyrm: wake it at your Hold before you ride out.') + (dead ? tale() : ''), tone: 'ember', act: [dead ? 'Hatch anew at your Hold' : 'Wake it at your Hold', () => ctx.go('#/hold'), true] });
+      lines.push({ step: 1, title: dead ? 'Your Elder Wyrm has fallen' : 'Your Elder Wyrm slumbers', line: (dead ? 'Every raid rides on its back. Hatch a new one at your Hold, then come back for them.' : 'A warband rides on its Wyrm: wake it at your Hold before you ride out.') + (dead ? tale() : ''), tone: 'ember', act: [dead ? 'Hatch anew at your Hold' : 'Wake it at your Hold', () => ctx.go('/hold'), true] });
     } else if (!oursAbroad()) {
       const keeper = wardKeeper(f), tw = wyrmOf(f);
       const loot = f.ore > 0 ? `their ${f.ore} ${f.ore === 1 ? 'sheaf' : 'sheaves'} of wildroot` : 'whatever wildroot they leave unbrewed';
@@ -605,7 +605,7 @@ export function skirmish(ctx: Ctx): Screen {
     clear(ours);
     ours.append(h('h2', { class: 'display', style: { marginBottom: '8px' } }, 'Your warband'));
     if (!mine.length) ours.append(h('p', { class: 'empty' }, !p ? (wallet.active?.playerId ? 'Reading…' : 'No warband yet.')
-      : h('span', null, 'No beasts ride with you yet. ', h('a', { href: '#/hold' }, 'Summon one at your Hold'), '.')));
+      : h('span', null, 'No beasts ride with you yet. ', h('a', { href: '/hold' }, 'Summon one at your Hold'), '.')));
     // the Wyrm first: every raid rides on it
     const sorted = [...mine].sort((x, y) => Number(isWyrm(y)) - Number(isWyrm(x)));
     ours.append(h('ul', { class: 'list' }, ...sorted.map((s) => {

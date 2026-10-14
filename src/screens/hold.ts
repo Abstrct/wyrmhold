@@ -1,5 +1,5 @@
 /* The Hold: your isle, read live from the ledger. Every beast and hallow is a struct you own;
- * every button signs a real transaction through the rite queue. `#/hold/<playerId>` watches
+ * every button signs a real transaction through the rite queue. `/hold/<playerId>` watches
  * another warden's hold, read-only. */
 import { h, clear, toast, confirmBox, keepFocus } from '../core/dom';
 import K from '../world/wyrmkit.js';
@@ -53,7 +53,7 @@ export function hold(ctx: Ctx): Screen {
   };
 
   const canvas = h('canvas');
-  const bar = topbar('#/hold', ctx.oath, { meters: true });
+  const bar = topbar('/hold', ctx.oath, { meters: true });
   const chants = chantsPanel();
   chants.el.setAttribute('data-tut', 'chants');
   const chron = chroniclePanel((j) => { const p = player(); return !!p && j.playerId === p.playerId; });
@@ -181,7 +181,7 @@ export function hold(ctx: Ctx): Screen {
     if (mine && !watching && wallet.unlocked && wallet.deviceSealed && !wallet.backedUp) omen('ember', 'Your soul-words are not kept anywhere yet. If this browser forgets you, your warden is lost.', ['Keep them', () => ctx.oath('words')]);
     const wyrmAlive = [...p.structs.values()].some((s) => s.typeId === 1 && !s.destroyed);
     const who = (pid: string) => (wallet.byPlayer(pid) ? 'your' : `${empire.players.get(pid) ? playerName(empire.players.get(pid)!) : 'another warden'}’s`);
-    if (p.planetId && !wyrmAlive && !mine) omen('gold', p.ore > 0 ? 'Their Elder Wyrm has fallen: this hold lies open to any raider.' : 'Their Elder Wyrm has fallen, but they hold no unbrewed wildroot to take.', p.ore > 0 ? ['Plan a raid', () => ctx.go(`#/skirmish/${p.playerId}`)] : undefined);
+    if (p.planetId && !wyrmAlive && !mine) omen('gold', p.ore > 0 ? 'Their Elder Wyrm has fallen: this hold lies open to any raider.' : 'Their Elder Wyrm has fallen, but they hold no unbrewed wildroot to take.', p.ore > 0 ? ['Plan a raid', () => ctx.go(`/skirmish/${p.playerId}`)] : undefined);
     if (p.planetId && !wyrmAlive && mine) omen('ember', 'Your Elder Wyrm has fallen. Until a new one hatches, your hold lies open to any raider.', ['Hatch anew', () => {
       const t = typeOf(1);
       if (!t) return;
@@ -190,11 +190,11 @@ export function hold(ctx: Ctx): Screen {
       toast('An egg is laid in the Wilds. The hatching chant begins as soon as the circle lands.', 'player', 5000);
     }]);
     for (const r of raiders) {
-      if (mine) omen('ember', `Raiders hang over your isle: ${who(r.owner)} warband. Fell their Elder Wyrm and the plunder breaks.`, ['Defend', () => ctx.go(`#/skirmish/${r.owner}`)]);
-      else omen('gold', `${who(r.owner).replace(/^y/, 'Y')} warband hangs over this isle. Fell their Elder Wyrm and the plunder chant runs.`, wallet.byPlayer(r.owner) ? ['Fight', () => ctx.go(`#/skirmish/${p.playerId}`)] : undefined);
+      if (mine) omen('ember', `Raiders hang over your isle: ${who(r.owner)} warband. Fell their Elder Wyrm and the plunder breaks.`, ['Defend', () => ctx.go(`/skirmish/${r.owner}`)]);
+      else omen('gold', `${who(r.owner).replace(/^y/, 'Y')} warband hangs over this isle. Fell their Elder Wyrm and the plunder chant runs.`, wallet.byPlayer(r.owner) ? ['Fight', () => ctx.go(`/skirmish/${p.playerId}`)] : undefined);
     }
     if (!p.online) omen('ember', mine ? 'Your leylines are overdrawn: every beast gutters until load fits the flow. Slumber something, or feed a spring.' : 'Their leylines are overdrawn: their beasts gutter.');
-    if (p.ore > 0 && !mine) omen('gold', `${sheaves(p.ore)} of their wildroot ${p.ore === 1 ? 'lies' : 'lie'} unbrewed: a raid could carry ${p.ore === 1 ? 'it' : 'them'} off.`, ['Plan a raid', () => ctx.go(`#/skirmish/${p.playerId}`)]);
+    if (p.ore > 0 && !mine) omen('gold', `${sheaves(p.ore)} of their wildroot ${p.ore === 1 ? 'lies' : 'lie'} unbrewed: a raid could carry ${p.ore === 1 ? 'it' : 'them'} off.`, ['Plan a raid', () => ctx.go(`/skirmish/${p.playerId}`)]);
     // only a Cauldron that stands awake on this isle is really brewing (as the chant engine sees it)
     const brewing = p.online && [...p.structs.values()].some((x) => x.typeId === 15 && !x.destroyed && x.built && x.online && x.locationId === p.planetId);
     if (p.ore > 0 && mine) omen('ember', brewing
@@ -284,7 +284,7 @@ export function hold(ctx: Ctx): Screen {
       VERB_NAME[v.id] || retell(v.label), v.cost ? h('span', { class: 'cost' }, `${v.cost} breath`) : null));
     if (s.built && t.generatingRate > 0) row.append(h('button', { type: 'button', class: 'btn small', onclick: () => feedDialog(p, s) }, 'Feed alpha'));
     if (s.built && !hallow && s.typeId !== 1 && !s.protectedStructIndex) row.append(h('button', { type: 'button', class: 'btn small', onclick: () => guardDialog(p, s) }, 'Guard…', h('span', { class: 'cost' }, `${t.defendChangeCharge} breath`)));
-    if (!hallow) row.append(h('a', { class: 'btn small', href: '#/skirmish', style: { borderColor: 'rgba(255,122,77,.5)', color: 'var(--ember-ink)' } }, 'Raid with it'));
+    if (!hallow) row.append(h('a', { class: 'btn small', href: '/skirmish', style: { borderColor: 'rgba(255,122,77,.5)', color: 'var(--ember-ink)' } }, 'Raid with it'));
     if (s.built && s.typeId !== 1) more.append(h('button', { type: 'button', class: 'btn small ghost', style: { color: 'var(--ember-ink)' }, onclick: async () => {
       if (await confirmBox(`Banish the ${L.name}?`, 'It is released for good. Its circle frees for another summoning.', 'Banish')) rite(p, () => act.trash(p, s), true, s.id);
     } }, 'Banish'));
@@ -326,9 +326,9 @@ export function hold(ctx: Ctx): Screen {
     const link = (mark: string, label: string, sub: string, color: string, href: string) => h('a', { class: 'rite', href }, ...face(mark, label, sub, color));
     if (!p || !mine) {
       // a sworn warden whose hold is still being read is not offered the oath again
-      if (watching) rites.append(link('raid', 'Plan a raid', 'on this hold', 'var(--ember)', '#/skirmish/' + (p?.playerId || watching)));
+      if (watching) rites.append(link('raid', 'Plan a raid', 'on this hold', 'var(--ember)', '/skirmish/' + (p?.playerId || watching)));
       else if (!swornHere()) rites.append(btn('oath', 'Swear the oath', 'bind · swear · seek', 'var(--gold)', ctx.oath));
-      rites.append(link('atlas', 'Sky Atlas', 'every warden', 'var(--violet)', '#/atlas'));
+      rites.append(link('atlas', 'Sky Atlas', 'every warden', 'var(--violet)', '/atlas'));
       return;
     }
     rites.append(
@@ -336,9 +336,9 @@ export function hold(ctx: Ctx): Screen {
       btn('seek', 'Seek Isle', !p.planetId ? 'begin here' : !p.planet ? 'a new shard' : num(p.planet?.gridAttributes?.ore) > 0 ? 'once yours is dug out' : 'yours is dug out', 'var(--violet)', () => { const q = riteP; if (q) rite(q, () => exploreConfirmed(q), false); }, false, 'seek'),
       p.fleet?.status === 'away'
         ? btn('home', 'Ride Home', 'your hold is unguarded', 'var(--sky)', () => { const q = riteP; if (q) rite(q, () => act.fleetMove(q, q.planetId), false); })
-        : link('ride', 'Ride Out', 'find a foe', 'var(--sky)', '#/atlas'),
-      link('skirmish', 'Skirmish', 'strike & plunder', 'var(--ember)', '#/skirmish'),
-      link('bestiary', 'Bestiary', 'know your beasts', 'var(--verdigris)', '#/bestiary'));
+        : link('ride', 'Ride Out', 'find a foe', 'var(--sky)', '/atlas'),
+      link('skirmish', 'Skirmish', 'strike & plunder', 'var(--ember)', '/skirmish'),
+      link('bestiary', 'Bestiary', 'know your beasts', 'var(--verdigris)', '/bestiary'));
   }
 
   /** A dialog the Hold opens gives focus back to whatever opened it when it closes, however it closes. */
@@ -438,7 +438,7 @@ export function hold(ctx: Ctx): Screen {
   function paintBanner(p: PlayerState | null) {
     clear(banner);
     if (watching) banner.append(h('div', { class: 'glass row', style: { alignSelf: 'center', padding: '8px 16px', borderRadius: '999px', margin: '0 auto', width: 'fit-content' } },
-      h('span', { class: 'italic' }, `You are looking at ${p ? playerName(p) : 'another warden'}’s hold`), h('a', { href: '#/hold' }, 'Back to your own')));
+      h('span', { class: 'italic' }, `You are looking at ${p ? playerName(p) : 'another warden'}’s hold`), h('a', { href: '/hold' }, 'Back to your own')));
     else if (!p && wallet.state !== 'empty' && wallet.active?.playerId) {
       // a ledger that stays silent is said plainly, with a way to ask again
       if (Date.now() - readingSince < 15000) banner.append(h('p', { class: 'italic', style: { textAlign: 'center' } }, 'Reading your hold from the ledger…'));

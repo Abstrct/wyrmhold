@@ -39,9 +39,9 @@ let routing = 0;
 const HOME_TITLE = document.title || 'Wyrmhodl';
 
 function parse(): { name: string; param?: string; path: string } {
-  const raw = (location.hash || '#/').replace(/^#\/?/, '');
+  const raw = (location.hash || '/').replace(/^#\/?/, '');
   const [name, param] = raw.split('/');
-  return { name: MAKERS[name] ? name : '', param: param ? decodeURIComponent(param) : undefined, path: '#/' + (MAKERS[name] ? name : '') };
+  return { name: MAKERS[name] ? name : '', param: param ? decodeURIComponent(param) : undefined, path: '/' + (MAKERS[name] ? name : '') };
 }
 
 async function route() {

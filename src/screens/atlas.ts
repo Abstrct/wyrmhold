@@ -18,7 +18,7 @@ import { alive, guardsOf, inRealm, reach, wyrmOf } from '../game/war';
 
 export function atlas(ctx: Ctx): Screen {
   const canvas = h('canvas');
-  const bar = topbar('#/atlas', ctx.oath, { meters: true });
+  const bar = topbar('/atlas', ctx.oath, { meters: true });
   const search = h('input', { id: 'warden-search', type: 'search', placeholder: 'A warden’s name', autocomplete: 'off' }) as HTMLInputElement;
   const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Covens' });
   const list = h('ul', { class: 'list scroll-y', 'data-tut': 'atlas' });
@@ -177,12 +177,12 @@ export function atlas(ctx: Ctx): Screen {
               h('div', null, h('dt', null, 'Warband'), h('dd', { class: 'mono' }, w.fleetId || '—')))),
           you ? h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, 'Your own isle, drifting where the old sky set it.') : scoutBox,
           // One road to a raid: the Skirmish walks it step by step (ride out, strike, plunder).
-          you ? h('a', { class: 'btn gold block', href: '#/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
-            : h('a', { class: 'btn ember block', href: `#/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
+          you ? h('a', { class: 'btn gold block', href: '/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
+            : h('a', { class: 'btn ember block', href: `/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
           // a raid on an empty hold only breaks things: say so before the ride
           !you && sightOk && oreOf(w) === 0 ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Nothing unbrewed to plunder there right now. Amber isles hold a prize.') : '',
           you ? '' : h('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } },
-            h('a', { class: 'btn small', href: `#/hold/${w.id}`, style: { flex: '1' } }, 'Scry their isle'),
+            h('a', { class: 'btn small', href: `/hold/${w.id}`, style: { flex: '1' } }, 'Scry their isle'),
             h('button', { type: 'button', class: 'btn small', style: { flex: '1' }, onclick: () => rideOut(w) }, 'Just ride there')),
           h('button', { type: 'button', class: 'btn ghost block', style: { marginTop: '10px' }, onclick: () => pick(null) }, 'Back to the whole sky')));
       }
@@ -208,7 +208,7 @@ export function atlas(ctx: Ctx): Screen {
     try {
       act.fleetMove(p, w.planetId);
       scene?.get()?.ride(sel);
-      toast(`Your warband rides for ${wardenName(w)}’s isle. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`#/skirmish/${w.id}`) });
+      toast(`Your warband rides for ${wardenName(w)}’s isle. When it lands, the plunder chant can begin.`, 'player', 6000, { label: 'To war', run: () => ctx.go(`/skirmish/${w.id}`) });
     } catch (e) { toast(retellError((e as Error).message), 'enemy'); }
   }
 

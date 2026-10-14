@@ -42,6 +42,24 @@ export const lore = (typeId: number): Lore => BEASTS[typeId] ?? { name: typeOf(t
 export const beastName = (typeId: number) => lore(typeId).name;
 export const isHallow = (t?: StructType) => t?.category === 'planet';
 
+/** Where a beast belongs: the Elder Wyrm is bound to its warden, a hallow to its isle, the rest to a realm. */
+export function homeOf(id: number): Realm | 'bound' | 'hallow' {
+  if (id === 1) return 'bound';
+  const t = typeOf(id);
+  if (t?.category === 'planet') return 'hallow';
+  return (t && reachOf(t.possibleAmbit)[0]) || 'wilds';
+}
+
+/** A beast's name as it reads in an address: /bestiary/stone-troll, /bestiary/worldroot. */
+export const slugOf = (id: number) => lore(id).name.toLowerCase().replace(/^the /, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+/** The rune an address names, by its slug or (as older links did) its number. */
+export function typeFromSlug(s?: string): number | undefined {
+  if (!s) return undefined;
+  if (/^\d+$/.test(s)) return BEASTS[Number(s)] ? Number(s) : undefined;
+  const id = Object.keys(BEASTS).map(Number).find((n) => slugOf(n) === s.toLowerCase());
+  return id;
+}
+
 /** Defensive arts, by the chain's unitDefenses value. */
 export const WARD_CRAFT: Record<string, string> = {
   noUnitDefenses: 'None', signalJamming: 'Glamour', defensiveManeuver: 'Windslip', stealthMode: 'Veil',

@@ -53,51 +53,51 @@ export function pathHas(id: string) { loadFlags(); return !!flags[id]; }
 const owns = (p: PlayerState | null, type: number, built = false) => !!p && [...p.structs.values()].some((s) => s.typeId === type && !s.destroyed && (!built || s.built));
 
 const STEPS: Step[] = [
-  { id: 'stone', title: 'Bind your soulstone', route: '#/', glow: 'begin',
+  { id: 'stone', title: 'Bind your soulstone', route: '/', glow: 'begin',
     say: 'Hoo. A new light on the old wind. First you need a soulstone: your name in the sky, sealed to this browser.',
     do: 'Press “Swear the oath” to begin.',
     done: 'There. The stone is warm. It knows your hand now.', test: () => wallet.state !== 'empty' },
-  { id: 'oath', title: 'Swear to a coven', route: '#/', glow: 'begin',
+  { id: 'oath', title: 'Swear to a coven', route: '/', glow: 'begin',
     say: 'No warden survives alone up here. A coven lends you a leyline until your own springs run.',
     do: 'Press “Swear the oath”, name your warden and choose a coven.',
     done: 'Sworn. The coven’s scribe has written you in.', test: () => !!wallet.active?.playerId },
-  { id: 'isle', title: 'Seek your isle', route: '#/hold', glow: 'seek',
+  { id: 'isle', title: 'Seek your isle', route: '/hold', glow: 'seek',
     say: 'Somewhere below the clouds drifts a shard with no one on it. Something old will hatch there to meet you.',
     do: 'Press Seek Isle in the bar at the bottom.',
     done: 'Feel that? Your isle. And listen: the egg is cracking.', test: (p) => !!p?.planetId },
-  { id: 'wyrm', title: 'Meet your Elder Wyrm', route: '#/hold', glow: 'wyrm',
+  { id: 'wyrm', title: 'Meet your Elder Wyrm', route: '/hold', glow: 'wyrm',
     say: 'Your Elder Wyrm is bound to you alone. Every raid you ride, you ride on its back.',
     do: 'Click your Elder Wyrm on the isle, or in the list on the left.',
     done: 'It knows your scent now. Guard it: if it falls mid-raid, the raid breaks.', test: () => !!flags.wyrm },
-  { id: 'delver', title: 'Summon a Root Delver', route: '#/hold', glow: 'summon',
+  { id: 'delver', title: 'Summon a Root Delver', route: '/hold', glow: 'summon',
     say: 'Your isle’s marrow is full of wildroot. A Root Delver lifts it up for you.',
     do: 'Press Summon, then choose the Root Delver.',
     done: 'The circle is drawn. Now the summoning must be sung.', test: (p) => owns(p, 14) },
-  { id: 'chant', title: 'Let the chant ripen', route: '#/hold', glow: 'chants',
+  { id: 'chant', title: 'Let the chant ripen', route: '/hold', glow: 'chants',
     say: 'Every summoning must be sung. Your Hold sings it for you with this computer’s spare strength, and it gets easier every moment.',
     do: 'Wait for the Incantations bar to fill; it says roughly how long. Explore meanwhile, but keep Wyrmhodl open: the singing happens here.',
     done: 'Heard! The Delver wakes and will dig on its own now.', test: (p) => owns(p, 14, true), slow: true },
-  { id: 'cauldron', title: 'Raise a Dawn Cauldron', route: '#/hold', glow: 'summon',
+  { id: 'cauldron', title: 'Raise a Dawn Cauldron', route: '/hold', glow: 'summon',
     say: 'Raiders can carry off wildroot. A Dawn Cauldron brews it into alpha, and brewed alpha can never be taken.',
     do: 'Press Summon, then choose the Dawn Cauldron.',
     done: 'Good. From now on, what you delve, you keep.', test: (p) => owns(p, 15) },
-  { id: 'alpha', title: 'Understand alpha', route: '#/grimoire', glow: 'tale',
+  { id: 'alpha', title: 'Understand alpha', route: '/grimoire', glow: 'tale',
     say: 'Alpha is the first light, fallen when the sky broke. It feeds your springs, calls your beasts, and the covens honour it as coin.',
     do: 'Open the Grimoire and read the old tale.',
     done: 'Now you know why every warden up here is hungry.', test: () => !!flags.grimoire },
-  { id: 'tithe', title: 'Tithe to your wellspring', route: '#/leyweave', glow: 'tithe',
+  { id: 'tithe', title: 'Tithe to your wellspring', route: '/leyweave', glow: 'tithe',
     say: 'Your beasts drink mana. Lend a little alpha to your coven’s wellspring and your mana flow rises.',
     do: 'In the Leyweave, press Tithe. You can take it back later.',
     done: 'Your flow rises. The leylines hum your name.', test: () => !!flags.tithe, ready: (p) => !!p && p.alpha > 0n },
-  { id: 'atlas', title: 'Read the sky', route: '#/atlas', glow: 'rich',
+  { id: 'atlas', title: 'Read the sky', route: '/atlas', glow: 'rich',
     say: 'Every light out there is a warden: sleeping, scheming, or watching you. Amber isles hold a prize.',
     do: 'In the Sky Atlas, press “Unbrewed wildroot” to show the rich isles.',
     done: 'You see them now. Some of them see you.', test: (p) => !!flags.atlas || !!flags.ride || p?.fleet?.status === 'away' },
-  { id: 'ride', title: 'Ride out', route: '#/atlas', glow: 'ride',
+  { id: 'ride', title: 'Ride out', route: '/atlas', glow: 'ride',
     say: 'While your warband is abroad your own hold stands unguarded, so be quick and be sure.',
     do: 'In the Sky Atlas, choose an isle, press Raid this hold, then Ride out.',
     done: 'The wind is under you. Fell their Elder Wyrm, and your plunder chant breaks their ward.', test: (p) => !!flags.ride || p?.fleet?.status === 'away' },
-  { id: 'strike', title: 'Strike', route: '#/skirmish', glow: 'unleash',
+  { id: 'strike', title: 'Strike', route: '/skirmish', glow: 'unleash',
     say: 'Read the odds before you swing. Most beasts that live will answer, and guards step in front of what they guard.',
     do: 'In Skirmish the wisest blow is chosen for you. Read what it will do, then press Unleash.',
     done: 'Blood in the clouds. You are a warden now, truly.', test: () => !!flags.strike },
@@ -122,8 +122,8 @@ let openHere = false;
 /** When the last step was walked in this visit (her farewell shows in full for a while). */
 let walkedAt = 0;
 const FAREWELL_MS = 20000;
-// '#/hold/<someone>' is their hold, not yours: only the Skirmish and Atlas count a sub-path as theirs
-const here = (route: string) => { const at = location.hash || '#/'; return route === '#/' ? at === '#/' || at === '#' : at === route || (route !== '#/hold' && at.startsWith(route + '/')); };
+// '/hold/<someone>' is their hold, not yours: only the Skirmish and Atlas count a sub-path as theirs
+const here = (route: string) => { const at = location.hash || '/'; return route === '/' ? at === '/' || at === '#' : at === route || (route !== '/hold' && at.startsWith(route + '/')); };
 
 /** Make a control glow until it is used (or for a while). Screens repaint, so the glow is
  * re-applied to whatever element carries the tag until it is touched or the moment passes. */
@@ -237,7 +237,7 @@ function paint() {
   const cramped = window.innerWidth < 1180 || window.innerHeight < 700;
   // with the path walked she keeps to a quiet pill (after her farewell), opened only when asked
   const folded = hidden() || (cur ? (!here(cur.route) || cramped) && !openHere : !openHere && Date.now() - walkedAt > FAREWELL_MS);
-  const sig = [...done].join(',') + '|' + folded + '|' + (location.hash || '#/') + '|' + (cur?.id || '') + '|' + waiting.map((w) => w.id).join(',') + '|' + cramped;
+  const sig = [...done].join(',') + '|' + folded + '|' + (location.hash || '/') + '|' + (cur?.id || '') + '|' + waiting.map((w) => w.id).join(',') + '|' + cramped;
   if (sig === lastSig) return;
   lastSig = sig;
   panel.classList.toggle('min', folded);
@@ -269,7 +269,7 @@ function paint() {
     todo,
     ripening,
     cur ? h('div', { class: 'row', style: { marginTop: '10px' } },
-      h('button', { type: 'button', class: 'btn small gold', onclick: () => { if (location.hash !== cur.route && !(cur.route === '#/' && (location.hash === '' || location.hash === '#/'))) location.hash = cur.route; if (cur.glow) setTimeout(() => glow(cur.glow!), 450); } }, 'Show me'),
+      h('button', { type: 'button', class: 'btn small gold', onclick: () => { if (location.hash !== cur.route && !(cur.route === '/' && (location.hash === '' || location.hash === '/'))) location.hash = cur.route; if (cur.glow) setTimeout(() => glow(cur.glow!), 450); } }, 'Show me'),
       cur.slow ? h('span', { class: 'faint', style: { fontSize: '12px' } }, 'This one ripens slowly.') : '') : '');
   if (line !== lastSaid) { lastSaid = line; speakInto(said, line); } else said.textContent = line;
 }

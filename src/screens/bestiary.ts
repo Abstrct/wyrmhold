@@ -6,21 +6,17 @@ import { mountScene, type Ctx, type Screen } from './types';
 import { topbar } from '../ui/frame';
 import { STRUCT_TYPES, typeOf } from '../data/catalogue';
 import { empire } from '../game/empire';
-import { HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, fmtMana, lore, reachOf, type Realm } from '../lore';
+import { HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, fmtMana, homeOf, lore, reachOf, slugOf, typeFromSlug } from '../lore';
+import { mark } from '../core/nav';
+import { pageTitle } from '../pages';
 import { owned } from '../realm';
 
-const HOME: Record<number, Realm | 'bound'> = { 1: 'bound' };
-function homeOf(id: number): Realm | 'bound' | 'hallow' {
-  if (HOME[id]) return HOME[id];
-  const t = typeOf(id)!;
-  if (t.category === 'planet') return 'hallow';
-  return reachOf(t.possibleAmbit)[0] || 'wilds';
-}
-
 export function bestiary(ctx: Ctx): Screen {
-  let type = Number(ctx.param) || 1;
+  let type = typeFromSlug(ctx.param) || 1;
+  // an old numbered link (/bestiary/9) settles on the beast's name
+  if (ctx.param && ctx.param !== slugOf(type)) mark(`/bestiary/${slugOf(type)}`);
   const canvas = h('canvas');
-  const bar = topbar('#/bestiary', ctx.oath, { meters: true });
+  const bar = topbar('/bestiary', ctx.oath, { meters: true });
   const index = h('aside', { class: 'glass panel col-l scroll-y', 'aria-label': 'Bestiary index', style: { overflowY: 'auto' } });
   const sheet = h('section', { class: 'glass panel rise', 'aria-label': 'Beast lore', style: { flex: '0 1 420px', minWidth: '280px', padding: '22px' } });
   const el = h('div', { class: 'screen' }, h('div', { class: 'stage' }, canvas),
@@ -28,7 +24,7 @@ export function bestiary(ctx: Ctx): Screen {
   const scene = mountScene(canvas, (c) => K.circle(c, { type }));
 
   function choose(id: number) {
-    type = id; scene.get()?.show(id); history.replaceState(null, '', `#/bestiary/${id}`); paint();
+    type = id; scene.get()?.show(id); mark(`/bestiary/${slugOf(id)}`); document.title = pageTitle(`/bestiary/${slugOf(id)}`) || document.title; paint();
     // on a phone the beast and its lore sit above the list: bring them back into view
     if (matchMedia('(max-width: 720px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -79,7 +75,7 @@ export function bestiary(ctx: Ctx): Screen {
       p ? h('p', { class: 'faint', style: { margin: '16px 0 0', fontSize: '14px' } }, owned(p, type) ? `You hold ${owned(p, type)}.` : 'You hold none yet.') : '',
       h('div', { class: 'row', style: { marginTop: '18px' } },
         h('button', { type: 'button', class: 'btn', onclick: () => scene.get()?.summon(type) }, 'Watch it summoned'),
-        p ? h('a', { class: 'btn gold', href: '#/hold' }, type === 1 ? 'Meet yours at your Hold' : t.buildLimit && owned(p, type) >= t.buildLimit ? 'Yours is at your Hold' : 'Summon at your Hold')
+        p ? h('a', { class: 'btn gold', href: '/hold' }, type === 1 ? 'Meet yours at your Hold' : t.buildLimit && owned(p, type) >= t.buildLimit ? 'Yours is at your Hold' : 'Summon at your Hold')
           : h('button', { type: 'button', class: 'btn gold', onclick: () => ctx.oath() }, 'Swear the oath first')));
   }
   const off = empire.onChange(paint);

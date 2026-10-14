@@ -17,7 +17,7 @@ export function gate(ctx: Ctx): Screen {
 
   // Until a warden is sworn, the gate's one call is the oath; after, it is home.
   const sworn = () => !!wallet.active?.playerId || wallet.state === 'locked';
-  const enter = h('a', { class: 'btn gold', href: '#/hold', 'data-tut': 'begin', style: { minHeight: '52px', padding: '0 28px', fontSize: '18px' },
+  const enter = h('a', { class: 'btn gold', href: '/hold', 'data-tut': 'begin', style: { minHeight: '52px', padding: '0 28px', fontSize: '18px' },
     onclick: (e: Event) => { if (!sworn()) { e.preventDefault(); ctx.oath(); } } });
   // a returning warden is greeted by name, with the one thing worth knowing before going in
   const welcome = h('p', { class: 'gate-welcome', 'aria-live': 'polite' });
@@ -53,7 +53,7 @@ export function gate(ctx: Ctx): Screen {
       h('p', { class: 'rise', style: { margin: '18px 0 0', fontSize: '19px', color: '#cfc5dd', maxWidth: '520px', animationDelay: '.45s' } },
         'The shards of the old sky drift above the cloud-sea, and every one is held by a living warden. Alpha — the first light — still seeps through their roots. Raise a wyrm, delve the wildroot, brew it into alpha, and take the sky from those who sleep.'),
       h('div', { class: 'row rise', style: { gap: '14px', marginTop: '34px', animationDelay: '.6s' } }, enter,
-        h('a', { class: 'btn', href: '#/grimoire', style: { minHeight: '52px', padding: '0 24px', fontSize: '18px' } }, 'Open the Grimoire')),
+        h('a', { class: 'btn', href: '/grimoire', style: { minHeight: '52px', padding: '0 24px', fontSize: '18px' } }, 'Open the Grimoire')),
       welcome,
       h('ol', { class: 'how rise', style: { animationDelay: '.75s' }, 'aria-label': 'How a warden plays' },
         how('1', 'Raise', 'Summon beasts and hallows on your floating isle.'),
@@ -71,7 +71,7 @@ export function gate(ctx: Ctx): Screen {
   wardens().then((list) => {
     count.textContent = list.length ? `· ${list.length}` : '';
     const items = list.slice(0, 40).map((w) => h('span', { class: 'row', style: { gap: '8px', flexWrap: 'nowrap' } },
-      h('span', { style: { color: 'var(--gold)' } }, '✦'), h('a', { href: `#/hold/${w.id}`, title: `Look at ${wardenName(w)}’s isle`, style: { color: 'inherit', textDecoration: 'none' } }, wardenName(w))));
+      h('span', { style: { color: 'var(--gold)' } }, '✦'), h('a', { href: `/hold/${w.id}`, title: `Look at ${wardenName(w)}’s isle`, style: { color: 'inherit', textDecoration: 'none' } }, wardenName(w))));
     ticker.textContent = '';
     for (const it of [...items, ...items.map((n) => n.cloneNode(true))]) ticker.append(it);
   }).catch(() => { ticker.textContent = 'The ledger is quiet just now.'; });

@@ -35,9 +35,9 @@ export const ICON = { close: 'M6 6l12 12M18 6L6 18', arrow: 'M5 12h14M13 6l6 6-6
 
 /** The roads, grouped by what they are for: play, the economy of mana, and learning. */
 const ROADS: [string, string, string][][] = [
-  [['#/hold', 'The Hold', 'Your isle and beasts'], ['#/atlas', 'Sky Atlas', 'Every isle in the sky: find one to raid'], ['#/skirmish', 'Skirmish', 'Fight and plunder']],
-  [['#/leyweave', 'Leyweave', 'Mana: tithe alpha for more']],
-  [['#/bestiary', 'Bestiary', 'Every beast and hallow'], ['#/grimoire', 'Grimoire', 'The lore and the glossary']],
+  [['/hold', 'The Hold', 'Your isle and beasts'], ['/atlas', 'Sky Atlas', 'Every isle in the sky: find one to raid'], ['/skirmish', 'Skirmish', 'Fight and plunder']],
+  [['/leyweave', 'Leyweave', 'Mana: tithe alpha for more']],
+  [['/bestiary', 'Bestiary', 'Every beast and hallow'], ['/grimoire', 'Grimoire', 'The lore and the glossary']],
 ];
 
 /** The top bar. Returns the element and a disposer for its listeners. */
@@ -52,7 +52,7 @@ export function topbar(route: string, onSoulstone: (start?: 'words') => void, op
   const help = h('button', { type: 'button', class: 'icon-btn help-btn', style: { width: '36px', height: '36px' }, 'aria-label': 'How to play', title: 'How to play', onclick: () => { void import('./help').then((m) => m.openHelp()); } }, '?');
   const meterBox = h('div', { class: 'meters' });
   const bar = h('header', { class: 'glass topbar' + (opts.meters ? ' with-meters' : '') },
-    h('a', { class: 'brand', href: '#/' }, sigil(), h('span', null, h('b', null, 'Wyrmhodl'), h('small', null, h('span', { class: 'row', style: { gap: '6px' } }, dot, bell)))),
+    h('a', { class: 'brand', href: '/' }, sigil(), h('span', null, h('b', null, 'Wyrmhodl'), h('small', null, h('span', { class: 'row', style: { gap: '6px' } }, dot, bell)))),
     opts.meters ? meterBox : null,
     h('nav', { class: 'nav', 'aria-label': 'Realms' }, ...ROADS.flatMap((group, gi) => [gi ? h('span', { class: 'nav-sep', 'aria-hidden': 'true' }) : null,
       ...group.map(([href, label, tip]) => h('a', { href, title: tip, class: route === href ? 'on' : '', 'aria-current': route === href ? 'page' : null }, label))])),

@@ -8,10 +8,10 @@ import { resetTour, holdTour } from './tour';
 let open: HTMLElement | null = null;
 
 const LOOP: [string, string, string, string][] = [
-  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your Hold. Each summoning is sung by a chant that your Hold sings for you. The Bestiary shows every beast before you bind it.', '#/hold'],
-  ['2', 'Dig and brew', 'The Delver digs up wildroot; the Cauldron brews it into alpha. Wildroot can be stolen; alpha cannot.', '#/hold'],
-  ['3', 'Grow', 'In the Leyweave, tithe alpha to your coven’s wellspring for more mana, then summon beasts and wards.', '#/leyweave'],
-  ['4', 'Raid', 'Find an isle with unbrewed wildroot in the Sky Atlas and ride out. In the Skirmish, fell its Elder Wyrm, and the plunder is yours.', '#/atlas'],
+  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your Hold. Each summoning is sung by a chant that your Hold sings for you. The Bestiary shows every beast before you bind it.', '/hold'],
+  ['2', 'Dig and brew', 'The Delver digs up wildroot; the Cauldron brews it into alpha. Wildroot can be stolen; alpha cannot.', '/hold'],
+  ['3', 'Grow', 'In the Leyweave, tithe alpha to your coven’s wellspring for more mana, then summon beasts and wards.', '/leyweave'],
+  ['4', 'Raid', 'Find an isle with unbrewed wildroot in the Sky Atlas and ride out. In the Skirmish, fell its Elder Wyrm, and the plunder is yours.', '/atlas'],
 ];
 
 export function openHelp() {
@@ -35,10 +35,10 @@ export function openHelp() {
         h('button', { type: 'button', class: 'btn small ghost', onclick: () => {
           resetTour();
           // already home: the hash would not change, so start the look around here
-          if (location.hash === '#/hold') { close(); holdTour(); } else go('#/hold')();
+          if (location.hash === '/hold') { close(); holdTour(); } else go('/hold')();
         } }, 'Show me around the Hold again'),
         h('button', { type: 'button', class: 'btn small ghost', onclick: () => { resetPath(); close(); } }, 'Start Ysolde’s path again'),
-        h('a', { class: 'btn small ghost', href: '#/grimoire', onclick: close }, 'The full Grimoire'))));
+        h('a', { class: 'btn small ghost', href: '/grimoire', onclick: close }, 'The full Grimoire'))));
   open = veil;
   document.body.append(veil);
   document.addEventListener('keydown', esc);

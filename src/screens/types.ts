@@ -1,7 +1,7 @@
 export interface Ctx {
-  /** The route this screen answers ("#/hold"). */
+  /** The route this screen answers ("/hold"). */
   route: string;
-  /** The part after the route ("#/hold/1-1000" → "1-1000"). */
+  /** The part after the route ("/hold/1-1000" → "1-1000"). */
   param?: string;
   go(path: string): void;
   /** Open the Oath (soulstone, coven, isle); 'words' opens on the soul-words. */

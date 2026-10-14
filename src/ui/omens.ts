@@ -65,7 +65,7 @@ function struckElsewhere(events: ChainTxEvent[]) {
     const foe = empire.players.get(d.attackerPlayerId);
     const by = foe ? `${playerName(foe)}’s warband` : 'A raider';
     const what = beastWord(shot.targetStructType);
-    toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => { location.hash = `#/skirmish/${d.attackerPlayerId}`; } });
+    toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => { location.hash = `/skirmish/${d.attackerPlayerId}`; } });
     return;
   }
 }

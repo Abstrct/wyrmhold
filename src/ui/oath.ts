@@ -211,7 +211,7 @@ export function openOath(start?: unknown) {
           try { sessionStorage.setItem('wyrmhold.hatch', '1'); } catch { /* no ceremony then */ }
           close();
           // already on the Hold: the hash will not change, so ask the router to build it afresh
-          if (location.hash === '#/hold') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '#/hold';
+          if (location.hash === '/hold') window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = '/hold';
         } }, 'Enter your Hold', icon(ICON.arrow, 18)),
         !wallet.backedUp ? h('p', { class: 'warn-line', style: { marginTop: '14px' } }, icon(ICON.warn, 15), 'You have not kept your soul-words yet. ',
           h('button', { type: 'button', class: 'linkish', onclick: () => void reveal('words') }, 'Keep them now')) : '');
@@ -260,7 +260,7 @@ export function openOath(start?: unknown) {
           h('div', null, h('dt', null, 'Soul-words'), h('dd', { style: { color: wallet.backedUp ? 'var(--verdigris)' : 'var(--ember-ink)' } }, wallet.backedUp ? 'Kept safe' : 'Not kept yet'))),
         h('div', { class: 'row', style: { marginTop: '18px' } },
           h('button', { type: 'button', class: wallet.backedUp ? 'btn' : 'btn gold', onclick: () => void reveal('words') }, wallet.backedUp ? 'Show my soul-words' : 'Keep my soul-words'),
-          location.hash === '#/hold' ? null : h('a', { class: 'btn ghost', href: '#/hold', onclick: close }, 'Go to my Hold')),
+          location.hash === '/hold' ? null : h('a', { class: 'btn ghost', href: '/hold', onclick: close }, 'Go to my Hold')),
         h('details', { class: 'more', open: detailsOpen, ontoggle: (e: Event) => { detailsOpen = (e.target as HTMLDetailsElement).open; } }, h('summary', null, 'Details and more'),
           h('dl', { class: 'facts' },
             h('div', null, h('dt', null, 'Warden mark'), h('dd', { class: 'mono' }, a.playerId)),

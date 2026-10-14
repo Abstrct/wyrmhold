@@ -60,7 +60,7 @@ async function weaveFromLedger(p: PlayerState | null): Promise<Weave> {
 
 export function leyweave(ctx: Ctx): Screen {
   const canvas = h('canvas');
-  const bar = topbar('#/leyweave', ctx.oath, { meters: true });
+  const bar = topbar('/leyweave', ctx.oath, { meters: true });
   const mine = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' } });
   const wellsBox = h('div', { class: 'grid-cards' });
   const chron = chroniclePanel((j) => /Reactor|GeneratorInfuse/.test(j.msgs.map((m) => m.typeUrl).join()), 10);
@@ -125,7 +125,7 @@ export function leyweave(ctx: Ctx): Screen {
         h('p', null, 'You hold no alpha yet. Alpha comes from wildroot: a Root Delver digs it up, and a Dawn Cauldron brews it into alpha. Come back once your Cauldron has brewed some.'),
         h('div', { class: 'row end', style: { marginTop: '16px' } },
           h('button', { type: 'button', class: 'btn ghost', onclick: () => none.remove() }, 'Close'),
-          h('a', { class: 'btn gold', href: '#/hold', onclick: () => none.remove() }, 'Go to my Hold'))));
+          h('a', { class: 'btn gold', href: '/hold', onclick: () => none.remove() }, 'Go to my Hold'))));
       document.body.append(none);
       return;
     }
