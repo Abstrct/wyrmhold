@@ -18,6 +18,7 @@ pnpm qa --list                # the suites
 node qa/run.mjs smoke --headed --keep       # watch it; leave the servers up afterwards
 node qa/run.mjs logic --net                 # also diff the shipped catalogue against the public ledger
 node qa/run.mjs flows --grep tab            # only the checks of a suite whose name matches
+node qa/run.mjs hold skirmish --gpu          # draw on this machine's GPU (Metal on a Mac): far faster than software WebGL
 ```
 
 Reports land in `qa/reports/<timestamp>/` as `report.md`, `report.json` and an `evidence/` folder of
