@@ -15,7 +15,8 @@ import { retell, retellError } from './lore';
 import { openOath } from './ui/oath';
 import { mountGuide } from './ui/guide';
 import { guardTheVeil } from './ui/veilguard';
-import { watchOmens, proclaim } from './ui/omens';
+import { watchOmens } from './ui/omens';
+import { chantSung } from './ui/chants';
 import { takeClaim } from './core/claims';
 import { canRetry } from './game/actions';
 import { go, here, mark, onRoute, startNav } from './core/nav';
@@ -67,14 +68,8 @@ async function route() {
 
 /* The herald: rites that land or fail, told once, wherever the warden is. */
 txq.onSettled((j) => {
-  // a summoning sung to the end is a moment: the sky says so
-  if (j.source === 'pow' && j.status === 'success' && j.msgs.some((m) => /StructBuildComplete/.test(m.typeUrl)) && j.playerId && wallet.byPlayer(j.playerId)) {
-    const beast = retell(j.label).replace(/ · chant of \d+$/, '').replace(/^.*chant · /i, '').replace(/^The /, '') || 'beast';
-    proclaim(`The ${beast} wakes`, 'Your summoning is sung. It stands on your isle now, and works on its own.', 'gold');
-    audio.stinger('alpha', 0.6);
-    return;
-  }
-  if (j.source === 'pow' && j.status === 'success') { toast(retell(j.label).replace(/ · chant of \d+$/, '') + ' — the chant is heard.', 'player'); audio.stinger('alpha', 0.5); return; }
+  // a chant sung to its end is told once, in plain words: a beast wakes, a sheaf is delved or brewed
+  if (j.source === 'pow' && j.status === 'success') { chantSung(j); return; }
   // a drawn circle is only the start: say what comes next, not "done"
   if (j.status === 'success' && j.msgs.some((m) => /StructBuildInitiate/.test(m.typeUrl))) {
     const beast = retell(j.label).replace(/^.*circle · /i, '').replace(/^The /, '') || 'beast';

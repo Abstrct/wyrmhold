@@ -97,6 +97,22 @@ export default async function (t, ctx) {
     expect.eq(JSON.stringify(r), JSON.stringify(['5 s', '5 s', '30 s', '1 min', '6 min', '60 min', '2 h', '10 h', '24 h', '7 days']), 'bells');
     const odd = r.filter((x) => /^1 (days|mins|hours)$/.test(x)); expect.eq(odd.length, 0, 'plural slips', odd);
   });
+  await t.test('chant waits read as a person says them: rough times, the part of the day they end, never only an upper bound', 'S2', async () => {
+    await m('/src/ui/chants.ts');
+    const r = await page.eval(`const c = window.__m['/src/ui/chants.ts']; const at = (d, hr) => new Date(2026, 9, d, hr), H = 600; return {
+      rough: [0, 5, 60, 400, 700, 5600, 10600, 30000].map((n) => c.roughWait(n)),
+      when: [c.whenAfter(3 * H, at(14, 15)), c.whenAfter(7 * H, at(14, 15)), c.whenAfter(11 * H, at(14, 15)), c.whenAfter(20 * H, at(14, 15)), c.whenAfter(2 * H, at(14, 2)), c.whenAfter(50 * H, at(14, 15))],
+      ripe: [c.ripeWhen(300), c.ripeWhen(9 * H)], zeros: c.quickZeros(), delve: c.chantTime(14000), brew: c.chantTime(28000), wyrm: c.chantTime(200) }`);
+    expect.eq(JSON.stringify(r.rough), JSON.stringify(['~1 min', '~1 min', '~6 min', '~40 min', '~1 h', '~9 h', '~18 h', '~2 days']), 'rough waits', r.rough);
+    expect.eq(JSON.stringify(r.when), JSON.stringify(['this evening', 'tonight', 'late tonight', 'tomorrow morning', 'before dawn', 'Friday evening']), 'when a wait ends', r.when);
+    expect.eq(r.ripe[0], 'ripe in ~30 min', 'a short wait');
+    expect.ok(/^ripe .+ \(~9 h\)$/.test(r.ripe[1]), 'a long wait says when, and about how long: ' + r.ripe[1]);
+    expect.ok(r.zeros >= 4 && r.zeros <= 12, 'what a device finds in a minute', r.zeros);
+    // the old panel showed the bound for a chant of no strength at all ("~26 h", "~2 days")
+    const h = (s) => Number((s.match(/^~(\d+) h$/) || [])[1]);
+    expect.ok(h(r.delve) >= 5 && h(r.delve) <= 15 && h(r.brew) >= 10 && h(r.brew) <= 26, 'a delve takes about half a day and a brew most of a day', r);
+    expect.ok(/min$/.test(r.wyrm), 'an Elder Wyrm hatches in minutes', r.wyrm);
+  });
   await t.test('mana, alpha, breath and hearts format as the Grimoire says', 'S2', async () => {
     const r = await L(`[lore.fmtMana(75000), lore.fmtMana(2275000), lore.fmtAlpha(122000000n), lore.fmtAlpha(1500n), lore.fmtBreath(5), lore.fmtBreath(99), lore.fmtBreath(240), util.formatAlpha('999950000'), util.formatPower('999960'), util.formatPower('0')]`);
     expect.eq(JSON.stringify(r), JSON.stringify(['75', '2,275', '122', '0.002', '5', 'full', 'full', '1.0 kg', '1 kW', '0 W']), 'formats');

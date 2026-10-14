@@ -10,6 +10,7 @@ import { markPath, resetPath } from '../ui/guide';
 import { resetTour } from '../ui/tour';
 import { HALLOW_COLOR, REALM_COLOR, REALM_NAME, WARD_CRAFT, fmtMana, lore, reachOf, slugOf } from '../lore';
 import { TALE, THINGS, RITES, laws } from '../grimoire';
+import { chantTime } from '../ui/chants';
 
 export function codex(ctx: Ctx): Screen {
   const bar = topbar('/grimoire', ctx.oath, { meters: true });
@@ -28,7 +29,8 @@ export function codex(ctx: Ctx): Screen {
     const realm = hallow ? 'Hallow' : t.id === 1 ? 'Every realm' : REALM_NAME[home];
     const color = hallow || t.id === 1 ? HALLOW_COLOR : REALM_COLOR[home];
     return [h('a', { href: `/bestiary/${slugOf(t.id)}`, style: { textDecoration: 'none', color: 'var(--gold-hi)' } }, lore(t.id).name), h('span', { style: { color } }, realm),
-      String(t.maxHealth), fmtMana(t.passiveDraw), t.buildDifficulty.toLocaleString('en-US'), WARD_CRAFT[t.unitDefenses] || '—'];
+      // the summoning chant as a time, the same one the Summon dialog and Incantations give
+      String(t.maxHealth), fmtMana(t.passiveDraw), h('span', { title: `Chant length ${t.buildDifficulty.toLocaleString('en-US')}` }, chantTime(t.buildDifficulty)), WARD_CRAFT[t.unitDefenses] || '—'];
   });
   const wyrmCanvas = h('canvas', { class: 'codex-wyrm', width: 300, height: 300, 'aria-hidden': 'true' }) as HTMLCanvasElement;
   let wyrm: { dispose(): void } | null = null;
@@ -55,7 +57,7 @@ export function codex(ctx: Ctx): Screen {
         h('li', null, 'Your soulstone never leaves this browser. Wyrmhodl asks it to set its seal on a rite; it never sends it anywhere.'),
         h('li', null, 'No rite is spoken until you speak it, and the Hold watches the sky after every rite before it tells you what happened.'),
         h('li', null, 'Before every summoning, your spare mana is weighed. If the leylines cannot bear it, the circle is not offered.'),
-        h('li', null, 'Chants run beside you on your own hands — every thread and lantern of this machine — and are spoken the bell they ripen.')))));
+        h('li', null, 'Chants ripen with time, even while Wyrmhodl is closed, and are spoken the moment you return to them. While it is open, Wyrmhodl chants on this device with its spare strength, so a lucky chant lands sooner; that work can warm a phone and drain it faster. “Chant gently” under Incantations uses less of it.')))));
   markPath('grimoire');
   return { el, title: 'Grimoire', leave: () => { wyrm?.dispose(); bar.dispose(); } };
 }
