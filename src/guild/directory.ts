@@ -8,6 +8,7 @@ import { cached } from '../cache/idb';
 import { relayFetch, RELAY_BASE } from './relay';
 import { lcd, LCD_URL, type RawGuild } from '../chain/lcd';
 import { wallet } from '../wallet/wallet';
+import { grass } from '../chain/grass';
 
 export interface GuildMeta {
   name: string; tag: string; description: string; logo: string; website: string;
@@ -19,8 +20,8 @@ export interface GuildEntry { id: string; chain: RawGuild; meta: GuildMeta | nul
 /** SN Corp: the guild whose infrastructure backs this client by default. */
 const ENV = (import.meta as { env?: Record<string, string | undefined> }).env || {};
 export const DEFAULT_GUILD = ENV.VITE_DEFAULT_GUILD || '0-5';
-/** VITE_GRASS_URL points a devnet client at its own stream; "off" disables GRASS entirely. */
-export const FALLBACK_GRASS = ENV.VITE_GRASS_URL || 'wss://beta.playstructs.com:1443';
+/** VITE_GRASS_URL points the client at one GRASS stream; "off" disables GRASS entirely. */
+const GRASS_ENV = ENV.VITE_GRASS_URL || '';
 const TTL = 10 * 60_000;
 
 let last: GuildEntry[] | null = null;
@@ -160,6 +161,34 @@ export async function guildApiBase(id: string): Promise<string | null> {
   let api = (await guildEntry(id).catch(() => null))?.services?.guild_api;
   if (!api) api = (await guilds({ fresh: true }).catch(() => [] as GuildEntry[])).find((g) => g.id === id)?.services?.guild_api;
   return api ? api.replace(/\/+$/, '').replace(/\/api$/, '') + '/api/' : null;
+}
+
+/** The GRASS stream to follow: VITE_GRASS_URL if set, else the home guild's, the default guild's, or
+ * any guild's. Every guild on this ledger indexes this ledger, so any of them will do; your own is
+ * simply nearest in spirit. Null when none publishes one (or GRASS is off). */
+export async function grassUrl(): Promise<string | null> {
+  if (GRASS_ENV === 'off') return null;
+  if (GRASS_ENV) return GRASS_ENV;
+  const list = await guilds().catch(() => [] as GuildEntry[]);
+  const home = await homeGuild();
+  for (const id of [home, DEFAULT_GUILD]) {
+    const url = list.find((g) => g.id === id)?.services?.grass;
+    if (url) return url;
+  }
+  return list.find((g) => g.services?.grass)?.services?.grass ?? null;
+}
+
+/** Keep GRASS connected to the right stream, choosing again when the warden this browser acts as changes. */
+export function followGrass() {
+  let who: string | null | undefined;
+  const pick = () => {
+    const now = wallet.active?.playerId ?? null;
+    if (now === who) return;
+    who = now;
+    grassUrl().then((u) => { if (who === now) grass.use(u); }, () => { /* keep what it has */ });
+  };
+  pick();
+  wallet.onChange(pick);
 }
 
 /** The guild of the player this browser acts as. */

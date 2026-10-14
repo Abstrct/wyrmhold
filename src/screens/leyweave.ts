@@ -7,6 +7,7 @@ import { topbar } from '../ui/frame';
 import { chroniclePanel } from '../ui/chants';
 import { lcd, big, type Grid, type RawInfusion, type RawReactor } from '../chain/lcd';
 import { guilds, type GuildEntry } from '../guild/directory';
+import { guildList } from '../guild/api';
 import { empire, type PlayerState } from '../game/empire';
 import { wallet } from '../wallet/wallet';
 import { txq } from '../wallet/queue';
@@ -15,6 +16,47 @@ import { covenColor, covenName, fmtAlpha, fmtMana, speak } from '../lore';
 interface Well { r: RawReactor; grid: Grid; commission: number }
 
 const M = (name: string, value: Record<string, unknown>) => ({ typeUrl: `/structs.structs.${name}`, value });
+
+interface Weave { rs: RawReactor[]; grids: Grid[]; inf: RawInfusion[]; sub: Grid | null }
+type GridRow = { object_id: string; attribute_type: string; val: string };
+
+/** The whole weave from the coven's Guild API: every wellspring and its grid in four reads (the
+ * ledger node needs one per wellspring), and only this warden's tithes (the node can only list
+ * every tithe on the ledger). Null when the API can't answer. */
+async function weaveFromGuild(p: PlayerState | null): Promise<Weave | null> {
+  const grid = (attr: keyof Grid) => guildList<GridRow>(`grid/attribute-type/${attr}/object-type/reactor`);
+  const [rows, fuel, capacity, power, inf, sub] = await Promise.all([
+    guildList<{ id: string; validator: string; guild_id: string; default_commission: string; owner: string }>('reactor/all'),
+    grid('fuel'), grid('capacity'), grid('power'),
+    p ? guildList<{ destination_type: string; destination_id: string; fuel_p: string; power_p: string; commission: string; player_id: string; address: string; ratio_p: string; defusing_p: string }>(`infusion/list/address/${encodeURIComponent(p.address)}`) : Promise.resolve([]),
+    p?.substationId ? guildList<GridRow>(`grid/object/${encodeURIComponent(p.substationId)}`) : Promise.resolve([]),
+  ]);
+  if (!rows || !fuel || !capacity || !power || !inf || !sub) return null;
+  const byReactor = new Map<string, Grid>();
+  for (const [attr, list] of [['fuel', fuel], ['capacity', capacity], ['power', power]] as const) {
+    for (const g of list) { const x = byReactor.get(g.object_id) ?? {}; x[attr] = String(g.val); byReactor.set(g.object_id, x); }
+  }
+  const shrine: Grid = {};
+  for (const g of sub) (shrine as Record<string, string>)[g.attribute_type] = String(g.val);
+  return {
+    rs: rows.map((r) => ({ id: r.id, validator: r.validator, guildId: r.guild_id, defaultCommission: String(r.default_commission ?? '0'), owner: r.owner })),
+    grids: rows.map((r) => byReactor.get(r.id) ?? {}),
+    inf: inf.map((i) => ({ destinationType: i.destination_type, destinationId: i.destination_id, fuel: String(i.fuel_p ?? '0'), power: String(i.power_p ?? '0'),
+      commission: String(i.commission ?? '0'), playerId: i.player_id, address: i.address, ratio: String(i.ratio_p ?? '0'), defusing: String(i.defusing_p ?? '0') })),
+    sub: p?.substationId ? shrine : null,
+  };
+}
+
+/** The same from the ledger node. */
+async function weaveFromLedger(p: PlayerState | null): Promise<Weave> {
+  const [rs, inf, sub] = await Promise.all([
+    lcd.list<RawReactor>('reactor', 'Reactor'),
+    p ? lcd.list<RawInfusion>('infusion', 'Infusion').catch(() => [] as RawInfusion[]) : Promise.resolve([] as RawInfusion[]),
+    p?.substationId ? lcd.entity<{ gridAttributes?: Grid }>('substation', p.substationId).then((r) => r.gridAttributes || {}).catch(() => null) : Promise.resolve(null),
+  ]);
+  const grids = await Promise.all(rs.map((r) => lcd.entity<{ gridAttributes?: Grid }>('reactor', r.id).then((x) => x.gridAttributes || {}).catch(() => ({} as Grid))));
+  return { rs, grids, inf, sub };
+}
 
 export function leyweave(ctx: Ctx): Screen {
   const canvas = h('canvas');
@@ -51,13 +93,10 @@ export function leyweave(ctx: Ctx): Screen {
   async function load() {
     const g = ++gen;
     const p = empire.commander;
-    const [rs, inf, gs, sub] = await Promise.all([
-      lcd.list<RawReactor>('reactor', 'Reactor'),
-      p ? lcd.list<RawInfusion>('infusion', 'Infusion').catch(() => [] as RawInfusion[]) : Promise.resolve([] as RawInfusion[]),
+    const [{ rs, grids, inf, sub }, gs] = await Promise.all([
+      weaveFromGuild(p).then((w) => w ?? weaveFromLedger(p)),
       guilds().catch(() => [] as GuildEntry[]),
-      p?.substationId ? lcd.entity<{ gridAttributes?: Grid }>('substation', p.substationId).then((r) => r.gridAttributes || {}).catch(() => null) : Promise.resolve(null),
     ]);
-    const grids = await Promise.all(rs.map((r) => lcd.entity<{ gridAttributes?: Grid }>('reactor', r.id).then((x) => x.gridAttributes || {}).catch(() => ({} as Grid))));
     // a screen already left, or a newer read under way, keeps what it has
     if (left || g !== gen) return;
     covens = new Map(gs.map((c) => [c.id, c]));

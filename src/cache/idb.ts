@@ -39,8 +39,11 @@ function openDb(): Promise<IDBDatabase | null> {
     let idb: IDBFactory | undefined;
     try { idb = (globalThis as { indexedDB?: IDBFactory }).indexedDB; } catch { idb = undefined; }
     if (!idb) { resolve(null); return; }
-    // A blocked or hung open must not stall every reader: give up after 3 s and stay in memory.
-    const t = setTimeout(() => resolve(null), 3000);
+    // A blocked or hung open must not stall every reader: after 3 s they go on in memory. The open
+    // itself is not abandoned: a page frozen by its first shader compile hears IndexedDB's answer
+    // late, and when it comes the cache moves to disk for every read and write after.
+    let late = false;
+    const t = setTimeout(() => { late = true; resolve(null); }, 3000);
     try {
       const req = idb.open(DB, VERSION);
       req.onupgradeneeded = (ev) => {
@@ -71,7 +74,7 @@ function openDb(): Promise<IDBDatabase | null> {
         const db = req.result;
         db.onversionchange = () => { db.close(); onDisk = false; dbP = Promise.resolve(null); };
         onDisk = true;
-        resolve(db);
+        if (late) dbP = Promise.resolve(db); else resolve(db);
       };
       req.onerror = () => { clearTimeout(t); resolve(null); };
       req.onblocked = () => { clearTimeout(t); resolve(null); };

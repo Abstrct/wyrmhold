@@ -5,7 +5,7 @@ import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar, icon, ICON } from '../ui/frame';
 import { cursorTip } from '../ui/tip';
-import { omenSight, skyFull, wardens, wardenName, type Sight, type Warden } from '../realm';
+import { omenSight, onSight, skyFull, wardens, wardenName, type Sight, type Warden } from '../realm';
 import { live } from '../chain/live';
 import { guilds, type GuildEntry } from '../guild/directory';
 import { empire } from '../game/empire';
@@ -59,6 +59,8 @@ export function atlas(ctx: Ctx): Screen {
     scouted = id;
     if (id) empire.watch(id);
   }
+  // GRASS keeps the sight current while the Atlas is open: a warden digs, brews or is plundered and their isle glows or dims
+  const offSight = onSight(() => { if (left || !scene) return; paint(); scene.get()?.glowRich(all.map((w) => oreOf(w))); });
   const offScout = empire.onChange(() => { if (scouted && sel >= 0 && all[sel]?.id === scouted) paint(); });
 
   const andList = (xs: string[]) => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs[0] || '');
@@ -268,5 +270,5 @@ export function atlas(ctx: Ctx): Screen {
       scene.dispose(); scene = null; sel = -1; buildSky(was);
     } else paint();
   });
-  return { el, title: 'Sky Atlas', leave: () => { left = true; offMe(); offScout(); scout(null); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
+  return { el, title: 'Sky Atlas', leave: () => { left = true; offMe(); offScout(); offSight(); scout(null); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
 }

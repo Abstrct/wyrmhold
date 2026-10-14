@@ -1,7 +1,7 @@
 # Builds the game and publishes dist/ to GitHub Pages on every push to main.
 # One-time setup: repo Settings → Pages → Build and deployment → Source: "GitHub Actions".
 # Optional repo variables (Settings → Secrets and variables → Actions → Variables) are baked into
-# the build: VITE_LCD_URL, VITE_RPC_WS_URL, VITE_DEFAULT_GUILD, VITE_GRASS_URL, VITE_RELAY_URL.
+# the build: VITE_LCD_URL, VITE_RPC_WS_URL, VITE_DEFAULT_GUILD, VITE_GRASS_URL, VITE_RELAY_URL, VITE_GUILD_READS.
 name: Pages
 
 on:
@@ -36,6 +36,7 @@ jobs:
           VITE_DEFAULT_GUILD: ${{ vars.VITE_DEFAULT_GUILD }}
           VITE_GRASS_URL: ${{ vars.VITE_GRASS_URL }}
           VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
+          VITE_GUILD_READS: ${{ vars.VITE_GUILD_READS }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

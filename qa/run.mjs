@@ -31,6 +31,7 @@ export const SUITES = [
   ['clarity', 'Clarity & tongue', 'No ledger ids, no engine words, no undefined; names and glosses'],
   ['a11y', 'Accessibility & input', 'Names on controls, keyboard paths, dialogs, reduced motion'],
   ['responsive', 'Screens & devices', 'Desktop, laptop, tablet, phone portrait and landscape'],
+  ['data', 'Data channels', 'The coven’s API through the relay, GRASS patching the sky, fallbacks to the node'],
   ['resilience', 'Resilience', 'Ledger down, slow, failing, unknown data, live feed drops'],
   ['perf', 'Performance & memory', 'Draw budgets, frame pacing, leaks across a long session'],
 ];

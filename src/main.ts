@@ -3,6 +3,7 @@
  * then the realm's screens, routed by hash. */
 import './styles.css';
 import { live } from './chain/live';
+import { followGrass } from './guild/directory';
 import { wallet } from './wallet/wallet';
 import { empire } from './game/empire';
 import { pow } from './pow/pow';
@@ -95,6 +96,7 @@ async function boot() {
   guardTheVeil();
   bootStep.textContent = 'Reaching the ledger…';
   live.start();
+  followGrass();
   watchOmens();
   bootStep.textContent = 'Unsealing your soulstone…';
   await Promise.race([wallet.restore(), new Promise((r) => setTimeout(r, 5000))])

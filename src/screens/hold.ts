@@ -445,6 +445,12 @@ export function hold(ctx: Ctx): Screen {
       else banner.append(h('div', { class: 'glass row', role: 'status', style: { alignSelf: 'center', margin: '0 auto', width: 'fit-content', maxWidth: '100%', padding: '8px 10px 8px 16px', borderRadius: '999px', flexWrap: 'wrap' } },
         h('span', null, 'The ledger is not answering yet. Your hold appears the moment it does.'),
         h('button', { type: 'button', class: 'btn small', onclick: () => empire.refresh(ctx.param || wallet.active?.playerId) }, 'Try again')));
+    } else if (p?.restored) {
+      // painted from the last visit while the ledger is read: say so, and say it plainly if the ledger stays silent
+      if (Date.now() - readingSince < 15000) banner.append(h('p', { class: 'italic', style: { textAlign: 'center' } }, 'Reading your hold from the ledger… this is how you left it.'));
+      else banner.append(h('div', { class: 'glass row', role: 'status', style: { alignSelf: 'center', margin: '0 auto', width: 'fit-content', maxWidth: '100%', padding: '8px 10px 8px 16px', borderRadius: '999px', flexWrap: 'wrap' } },
+        h('span', null, 'The ledger is not answering yet. This is your hold as you left it; your rites wait until it answers.'),
+        h('button', { type: 'button', class: 'btn small', onclick: () => empire.refresh(p.playerId) }, 'Try again')));
     }
   }
 

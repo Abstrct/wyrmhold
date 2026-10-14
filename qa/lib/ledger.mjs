@@ -1,9 +1,13 @@
-/* A ledger the tests own: the LCD (REST) and the live feed (Tendermint WebSocket) of a small sky,
- * served from memory with deterministic bells. Faults can be injected (down, slow, failing paths),
- * state can be changed between reads, and events can be struck on the live feed at will.
- * No dependencies: the WebSocket server is the few lines of RFC 6455 the client needs. */
+/* A ledger the tests own: the LCD (REST), the live feed (Tendermint WebSocket) and a guild's GRASS
+ * stream (NATS over a WebSocket, at /grass) of a small sky, served from memory with deterministic
+ * bells, and enough of each guild's API for the oath and for the reads the client takes from it.
+ * Faults can be injected (down, slow, failing paths, an indexer that lags), state can be changed
+ * between reads, and events can be struck on either feed at will.
+ * No dependencies beyond the game's own: the WebSocket server is the few lines of RFC 6455 the client needs. */
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 const json = (res, status, body, extra = {}) => { const s = JSON.stringify(body); res.writeHead(status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-length': Buffer.byteLength(s), ...extra }); res.end(s); };
 const notFound = (res, what) => json(res, 404, { code: 5, message: `${what} not found`, details: [] });
@@ -19,6 +23,16 @@ export class Ledger {
     this.refusals = [];   // txs sealed by one key for another's messages, as the ante handler refuses them
     this.ticking = 0;
     this.onRequest = null;
+    /* GRASS and the Guild API */
+    this.grassSockets = new Set();
+    this.grassDown = false;
+    /** guild id → session ids its API has signed in; every API read lands in `guildReads`. */
+    this.guildSessions = new Map();
+    this.guildReads = [];
+    this.logins = [];
+    /** How many blocks the guilds' indexer trails the ledger by, and what it says of itself. */
+    this.indexerLag = 0;
+    this.indexerStatus = 'current';
   }
 
   async start({ lcdPort = 0, wsPort = 0, blockMs = 1000 } = {}) {
@@ -35,12 +49,13 @@ export class Ledger {
     this.wsPort = this.wsServer.address().port;
     this.lcdUrl = `http://127.0.0.1:${this.lcdPort}`;
     this.wsUrl = `ws://127.0.0.1:${this.wsPort}/websocket`;
+    this.grassUrl = `ws://127.0.0.1:${this.wsPort}/grass`;
     this.ticking = setInterval(() => this.tick(), blockMs);
     return this;
   }
   async stop() {
     clearInterval(this.ticking);
-    for (const s of this.sockets) { try { s.destroy(); } catch { /* ignore */ } }
+    for (const s of [...this.sockets, ...this.grassSockets]) { try { s.destroy(); } catch { /* ignore */ } }
     await Promise.all([new Promise((r) => this.http.close(() => r())), new Promise((r) => this.wsServer.close(() => r()))]);
   }
 
@@ -50,7 +65,21 @@ export class Ledger {
     const w = this.world; w.height++;
     for (const t of this.txs.values()) if (!t.height) t.height = w.height;
     if (!this.faults.wsDown) this.broadcast({ jsonrpc: '2.0', id: 1, result: { query: "tm.event='NewBlock'", data: { type: 'tendermint/event/NewBlock', value: { block: { header: { height: String(w.height), time: new Date().toISOString() }, data: { txs: [] } } } } } });
+    // the indexer's heartbeat, as structs-sync-state sends it once a block is in
+    this.emitGrass('consensus', { category: 'block', height: w.height - this.indexerLag, updated_at: new Date().toISOString() });
   }
+  /** Send one GRASS message (the payload gains its `subject`, as the triggers add it). */
+  emitGrass(subject, payload) {
+    if (this.grassDown) return;
+    const body = Buffer.from(JSON.stringify({ subject, ...payload }));
+    for (const s of this.grassSockets) {
+      const sid = s.subs.find((x) => natsMatch(x.subject, subject))?.sid;
+      if (!sid) continue;
+      try { s.write(encodeFrame(Buffer.concat([Buffer.from(`MSG ${subject} ${sid} ${body.length}\r\n`), body, Buffer.from('\r\n')]), 2)); } catch { /* gone */ }
+    }
+  }
+  /** Drop every GRASS socket (the stream went away); clients reconnect on their own. */
+  dropGrass() { for (const s of this.grassSockets) { try { s.destroy(); } catch { /* ignore */ } } this.grassSockets.clear(); }
   /** Strike a transaction's events on the live feed, as the node would. */
   emitTx(events, { hash = randomBytes(16).toString('hex').toUpperCase(), signer = '', action = '' } = {}) {
     const evs = events.map((e) => ({ type: 'structs.structs.' + e.type, attributes: [{ key: e.key || Object.keys(e.data || {})[0] || 'detail', value: typeof e.data === 'string' ? e.data : JSON.stringify(e.data) }] }));
@@ -63,10 +92,12 @@ export class Ledger {
 
   /* ── the live feed ─────────────────────────────────────────────────── */
   upgrade(req, socket) {
-    if (this.faults.wsDown) { socket.destroy(); return; }
+    const grass = (req.url || '').startsWith('/grass');
+    if (grass ? this.grassDown : this.faults.wsDown) { socket.destroy(); return; }
     const key = req.headers['sec-websocket-key'];
     const accept = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+    if (grass) return this.grassSocket(socket);
     this.sockets.add(socket);
     let buf = Buffer.alloc(0);
     socket.on('data', (d) => {
@@ -85,6 +116,34 @@ export class Ledger {
     socket.on('error', () => this.sockets.delete(socket));
   }
 
+  /* ── GRASS: the NATS protocol, as much as a subscriber speaks ──────── */
+  grassSocket(socket) {
+    socket.subs = [];
+    this.grassSockets.add(socket);
+    const send = (text) => { try { socket.write(encodeFrame(Buffer.from(text), 2)); } catch { /* gone */ } };
+    send(`INFO {"server_id":"qa","server_name":"qa-grass","version":"2.10.0","proto":1,"headers":true,"max_payload":1048576}\r\n`);
+    let buf = Buffer.alloc(0), text = '';
+    socket.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      for (;;) {
+        const f = decodeFrame(buf); if (!f) break;
+        buf = buf.subarray(f.size);
+        if (f.opcode === 8) { socket.end(); return; }
+        if (f.opcode === 9) { socket.write(encodeFrame(f.payload, 10)); continue; }
+        text += f.payload.toString();
+        let nl;
+        while ((nl = text.indexOf('\r\n')) >= 0) {
+          const line = text.slice(0, nl); text = text.slice(nl + 2);
+          const [op, ...rest] = line.split(' ');
+          if (op === 'SUB') socket.subs.push({ subject: rest[0], sid: rest[rest.length - 1] });
+          else if (op === 'PING') send('PONG\r\n');
+        }
+      }
+    });
+    socket.on('close', () => this.grassSockets.delete(socket));
+    socket.on('error', () => this.grassSockets.delete(socket));
+  }
+
   /* ── the LCD ───────────────────────────────────────────────────────── */
   async handle(req, res) {
     const url = new URL(req.url, 'http://x');
@@ -97,6 +156,7 @@ export class Ledger {
     if (this.faults.failPaths.some((re) => re.test(path))) return json(res, this.faults.failStatus, { code: 13, message: 'the keeper stumbled', details: [] });
     let body = '';
     if (req.method === 'POST') { try { for await (const c of req) body += c; } catch { return; } }
+    this.req = req;
     try { return this.route(req.method, path, url.searchParams, body, res); }
     catch (e) { return json(res, 500, { code: 2, message: String(e && e.message || e) }); }
   }
@@ -107,9 +167,9 @@ export class Ledger {
     const dec = (s) => decodeURIComponent(s || '');
     // guild.json and the mock Guild API live on the same origin
     const mg = /^\/guilds\/([^/]+)\/guild\.json$/.exec(path);
-    if (mg) { const g = w.guilds.get(mg[1]); if (!g) return notFound(res, 'guild'); return json(res, 200, { guild: { id: g.id, name: g.meta.name, tag: g.meta.tag, description: g.meta.description, logo: '', website: '', services: { guild_api: `${this.lcdUrl}/guildapi/${g.id}`, grass_nats_websocket: null, matrix: null, explorer: null } } }); }
+    if (mg) { const g = w.guilds.get(mg[1]); if (!g) return notFound(res, 'guild'); return json(res, 200, { guild: { id: g.id, name: g.meta.name, tag: g.meta.tag, description: g.meta.description, logo: '', website: '', services: { guild_api: `${this.lcdUrl}/guildapi/${g.id}`, grass_nats_websocket: this.grassUrl, matrix: null, explorer: null } } }); }
     const ma = /^\/guildapi\/([^/]+)\/(.*)$/.exec(path);
-    if (ma) return this.guildApi(ma[1], ma[2], method, body, res);
+    if (ma) return this.guildApi(ma[1], ma[2] + (q.toString() ? '?' + q.toString() : ''), method, body, res);
     if (seg[0] === 'structs') {
       const [, kind, id] = seg;
       const page = (rows, field) => { const limit = Number(q.get('pagination.limit') || 100), rev = q.get('pagination.reverse') === 'true'; const list = rev ? [...rows].reverse() : rows; return json(res, 200, { [field]: list.slice(0, limit), pagination: { next_key: null, total: String(rows.length) } }); };
@@ -182,8 +242,87 @@ export class Ledger {
       return ok({ player_id: pid, playerId: pid, username: b.username, address: b.address });
     }
     if (rest === 'api/auth/check-username' || /^api\/username\//.test(rest)) return ok({ available: true });
-    return ok({});
+    if (rest === 'api/timestamp') return ok({ unix_timestamp: Math.floor(Date.now() / 1000) });
+    if (rest === 'api/auth/login' && method === 'POST') return this.guildLogin(gid, body, res);
+    // everything below needs the session the sign-in set (the relay's jar carries the cookie)
+    const sid = /(?:^|;\s*)PHPSESSID=([^;]+)/.exec(this.req?.headers.cookie || '')?.[1];
+    if (!sid || !this.guildSessions.get(gid)?.has(sid)) return json(res, 401, { success: false, errors: { authentication_error: 'Login required' }, data: null });
+    this.guildReads.push({ gid, rest, at: Date.now() });
+    const rows = this.guildRows(gid, rest);
+    if (rows === undefined) return json(res, 404, { success: false, errors: { route: 'no such read in the mock' }, data: null });
+    return ok(rows);
   }
+
+  /** POST /api/auth/login: `LOGIN_GUILD{guild}ADDRESS{address}DATETIME{unix}`, signed by the address's key, for a member of this guild. */
+  guildLogin(gid, body, res) {
+    const w = this.world;
+    let b = {}; try { b = JSON.parse(body); } catch { /* ignore */ }
+    const msg = `LOGIN_GUILD${b.guild_id}ADDRESS${b.address}DATETIME${b.unix_timestamp}`;
+    let valid = false;
+    try { valid = secp256k1.verify(Buffer.from(String(b.signature), 'hex').subarray(0, 64), sha256(new TextEncoder().encode(msg)), Buffer.from(String(b.pubkey), 'hex'), { prehash: false }); } catch { valid = false; }
+    const fresh = Math.abs(Date.now() / 1000 - Number(b.unix_timestamp)) < 600;
+    const pid = w.addresses.get(b.address) || w.anyAddressPlayer;
+    const member = pid && w.players.get(pid)?.Player.guildId === gid && b.guild_id === gid;
+    this.logins.push({ gid, address: b.address, valid, fresh, member: !!member, at: Date.now() });
+    if (!valid || !fresh) return json(res, 401, { success: false, errors: { signature_validation_failed: 'Invalid signature' }, data: null });
+    if (!member) return json(res, 401, { success: false, errors: { player_address_does_not_exists: 'Player address does not exist' }, data: null });
+    const sid = randomBytes(12).toString('hex');
+    if (!this.guildSessions.has(gid)) this.guildSessions.set(gid, new Set());
+    this.guildSessions.get(gid).add(sid);
+    return json(res, 200, { success: true, errors: [], data: null }, { 'set-cookie': `PHPSESSID=${sid}; path=/; HttpOnly; SameSite=Lax` });
+  }
+
+  /** The rows a Guild API read answers with (snake_case, numbers as strings), or undefined for a route the mock lacks. */
+  guildRows(gid, rest) {
+    const w = this.world;
+    const [path] = rest.split('?');
+    const q = new URLSearchParams(rest.split('?')[1] || '');
+    const m = (re) => re.exec(path);
+    let r;
+    if (path === 'api/block') {
+      const height = w.height - this.indexerLag;
+      return { height, tip_height: w.height, lag_blocks: this.indexerLag, status: this.indexerStatus, updated_at: new Date().toISOString() };
+    }
+    const paged = (list, page) => { const limit = Math.min(Number(q.get('limit') || 100), 10000); return list.slice((page - 1) * limit, page * limit); };
+    const GRID = { 0: 'ore', 11: 'lastAction' };
+    const gridOf = (objectId) => {
+      const t = objectId.split('-')[0];
+      const src = t === '1' ? w.players.get(objectId) : t === '3' ? w.reactors.get(objectId) : t === '4' ? w.substations.get(objectId) : t === '2' ? w.planets.get(objectId) : null;
+      return Object.entries(src?.gridAttributes || {}).filter(([, v]) => v !== '' && v != null && v !== '0').map(([a, v]) => ({ id: `${a}-${objectId}`, attribute_type: a, object_type: { 1: 'player', 2: 'planet', 3: 'reactor', 4: 'substation' }[t], object_index: Number(objectId.split('-')[1]), object_id: objectId, val: String(v), updated_at: '' }));
+    };
+    if ((r = m(/^api\/grid\/attribute-type\/([^/]+)\/object-type\/([^/]+)\/page\/(\d+)$/))) {
+      const [, attr, ot, page] = r;
+      let rows;
+      // player wildroot and bells come from the same records the LCD's grid pages read
+      if (ot === 'player') rows = w.gridRecords.map((g) => { const x = /^(\d+)-1-(\d+)$/.exec(g.attributeId); return x && GRID[x[1]] === attr && Number(g.value) ? { object_id: '1-' + x[2], attribute_type: attr, object_type: 'player', val: String(g.value) } : null; }).filter(Boolean);
+      else if (ot === 'reactor') rows = [...w.reactors.keys()].flatMap(gridOf).filter((g) => g.attribute_type === attr);
+      else rows = [];
+      return paged(rows, Number(page));
+    }
+    if ((r = m(/^api\/grid\/object\/([^/]+)\/page\/(\d+)$/))) return paged(gridOf(decodeURIComponent(r[1])), Number(r[2]));
+    if ((r = m(/^api\/reactor\/all\/page\/(\d+)$/))) return paged([...w.reactors.values()].map(({ Reactor: x }) => ({ id: x.id, validator: x.validator, guild_id: x.guildId, default_commission: x.defaultCommission, owner: x.owner })), Number(r[1]));
+    if ((r = m(/^api\/infusion\/list\/address\/([^/]+)\/page\/(\d+)$/))) {
+      const addr = decodeURIComponent(r[1]);
+      // the mock maps every address to the sworn warden, so their tithes are any address's
+      const pid = w.addresses.get(addr) || w.anyAddressPlayer;
+      return paged(w.infusions.filter((i) => i.address === addr || i.playerId === pid).map((i) => ({ destination_type: i.destinationType, destination_id: i.destinationId, fuel_p: i.fuel, power_p: i.power, commission: i.commission, player_id: i.playerId, address: addr, ratio_p: i.ratio, defusing_p: i.defusing })), Number(r[2]));
+    }
+    if ((r = m(/^api\/fleet\/list\/location\/([^/]+)\/page\/(\d+)$/))) {
+      const at = decodeURIComponent(r[1]);
+      return paged([...w.fleets.values()].filter((f) => f.locationId === at).map((f) => ({ id: f.id, owner: f.owner, status: f.status, location_type: f.locationType, location_id: f.locationId, location_list_forward: f.locationListForward, location_list_backward: f.locationListBackward })), Number(r[2]));
+    }
+    return undefined;
+  }
+}
+
+/** NATS subject matching: `*` is one token, `>` the rest. */
+function natsMatch(pattern, subject) {
+  const p = pattern.split('.'), s = subject.split('.');
+  for (let i = 0; i < p.length; i++) {
+    if (p[i] === '>') return s.length > i;
+    if (i >= s.length || (p[i] !== '*' && p[i] !== s[i])) return false;
+  }
+  return p.length === s.length;
 }
 
 /* ── A signed tx, read as far as the ante handler reads it ─────────── */

@@ -14,9 +14,10 @@ export async function openGame(page, appUrl, route = '#/', { storage = QUIET, vi
   await page.recycle();
   if (viewport) await page.setViewport(viewport.width, viewport.height, { mobile: !!viewport.mobile });
   if (media) await page.emulateMedia(media);
-  // land on the origin first, so storage can be written before the game boots
+  // land on the origin first, so storage can be written before the game boots (and the last check's
+  // keys and saved wardens are gone: every check meets a browser that has never seen the game)
   await page.goto(appUrl + 'qa/blank.html');
-  await page.eval(`localStorage.clear(); sessionStorage.clear(); const st = ${JSON.stringify(storage)}; for (const k in st) localStorage.setItem(k, st[k]); await new Promise((r) => { const q = indexedDB.deleteDatabase('wyrmhold-keys'); q.onsuccess = q.onerror = q.onblocked = r; setTimeout(r, 500); });`);
+  await page.eval(`localStorage.clear(); sessionStorage.clear(); const st = ${JSON.stringify(storage)}; for (const k in st) localStorage.setItem(k, st[k]); for (const db of ['wyrmhold-keys', 'wyrmhold-cache']) await new Promise((r) => { const q = indexedDB.deleteDatabase(db); q.onsuccess = q.onerror = q.onblocked = r; setTimeout(r, 500); });`);
   await page.goto(appUrl + route);
   if (waitBoot) await page.waitFor(`!document.getElementById('boot') || document.getElementById('boot').classList.contains('gone')`, { what: 'the boot veil to lift', timeout: 60000 });
   if (sworn) await swear(page, playerId);

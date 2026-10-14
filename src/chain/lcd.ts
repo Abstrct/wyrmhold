@@ -142,6 +142,33 @@ export function statusText(mask: number): string {
 /** the ledger node grid attribute ids: the first part of a gridRecord's `attributeId` ("<attr>-<objectType>-<index>"). */
 const GRID_FIELDS: Record<number, keyof Grid> = { 0: 'ore', 1: 'fuel', 2: 'capacity', 3: 'load', 4: 'structsLoad', 5: 'power', 6: 'connectionCapacity', 7: 'connectionCount', 11: 'lastAction', 12: 'nonce' };
 
+/* Every attribute store, by the index its records' ids begin with (types/keys.go; the order the
+ * entity JSON lists them, checked live by structs-universe's perception). */
+export const GRID_ATTRS = ['ore', 'fuel', 'capacity', 'load', 'structsLoad', 'power', 'connectionCapacity', 'connectionCount',
+  'allocationPointerStart', 'allocationPointerEnd', 'proxyNonce', 'lastAction', 'nonce', 'ready', 'checkpointBlock'] as const;
+export const STRUCT_ATTRS = ['health', 'status', 'blockStartBuild', 'blockStartOreMine', 'blockStartOreRefine', 'protectedStructIndex', 'typeCount'] as const;
+export const PLANET_ATTRS = ['planetaryShield', 'repairNetworkQuantity', 'defensiveCannonQuantity', 'coordinatedGlobalShieldNetworkQuantity',
+  'lowOrbitBallisticsInterceptorNetworkQuantity', 'advancedLowOrbitBallisticsInterceptorNetworkQuantity',
+  'lowOrbitBallisticsInterceptorNetworkSuccessRateNumerator', 'lowOrbitBallisticsInterceptorNetworkSuccessRateDenominator',
+  'orbitalJammingStationQuantity', 'advancedOrbitalJammingStationQuantity', 'blockStartRaid', 'blockRaiderArrived',
+  'blockStartOreMine', 'blockStartOreRefine', 'oreMiningActiveQuantity', 'oreRefiningActiveQuantity'] as const;
+export type AttrStore = 'grid' | 'struct' | 'planet';
+export interface AttrRecord { store: AttrStore; name: string; objectId: string; value: string }
+
+/** An attribute event (EventGrid, EventStructAttribute, EventPlanetAttribute) as its store, attribute
+ * name, object and new value — always the whole new value, 0 when the ledger cleared it. Null for
+ * any other event, an index this client doesn't know, or a sub-indexed record (typeCount's). */
+export function attributeEvent(type: string, data: unknown): AttrRecord | null {
+  const spec = ({ EventGrid: ['grid', 'gridRecord', GRID_ATTRS], EventStructAttribute: ['struct', 'structAttributeRecord', STRUCT_ATTRS], EventPlanetAttribute: ['planet', 'planetAttributeRecord', PLANET_ATTRS] } as const)[type as 'EventGrid'];
+  if (!spec) return null;
+  const rec = ((data as Record<string, unknown>)?.[spec[1]] ?? data) as { attributeId?: unknown; value?: unknown } | null;
+  const m = /^(\d+)-(\d+)-(\d+)$/.exec(String(rec?.attributeId ?? ''));
+  const name = m ? (spec[2] as readonly string[])[Number(m[1])] : undefined;
+  const value = rec?.value == null || rec.value === '' ? '0' : String(rec.value);
+  if (!m || !name || !/^\d+$/.test(value)) return null;
+  return { store: spec[0], name, objectId: `${m[2]}-${m[3]}`, value };
+}
+
 /** An EventGrid payload as the object it touched, the field and the new value; null if it isn't one. */
 export function gridRecord(data: unknown): { objectId: string; objectType: number; field: keyof Grid; value: string } | null {
   const rec = ((data as { gridRecord?: unknown })?.gridRecord ?? data) as { attributeId?: unknown; value?: unknown } | null;

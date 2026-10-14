@@ -83,6 +83,8 @@ class TxQueue {
   private running = false;
   private kick: (() => void) | null = null;
   chargeOf: ChargeOf = () => null;
+  /** Whether what the client holds of a player came from the ledger this visit (not a saved copy). */
+  verifiedOf: (playerId: string) => boolean = () => true;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -264,6 +266,8 @@ class TxQueue {
     const sent = this.sentAt.get(j.account);
     // Without a live height (socket down) a block is about 6 s; wait that long instead.
     if (sent && sent.n >= PER_BLOCK && (live.height ? sent.height >= live.height : Date.now() - sent.at < 7000)) return 'next bell';
+    // a rite is never sent on the strength of a saved copy: the ledger is read first
+    if (j.playerId && !this.verifiedOf(j.playerId)) return 'reading the ledger';
     if (j.lane === 'action') {
       if (earlier.some((x) => x.account === j.account && x.lane === 'action' && ['queued', 'waiting', 'signing'].includes(x.status))) return 'behind another action';
       if (this.jobs.some((x) => x !== j && x.account === j.account && x.lane === 'action' && x.status === 'pending')) return 'previous action landing';
