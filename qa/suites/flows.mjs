@@ -69,10 +69,10 @@ export default async function (t, ctx) {
       await page.waitFor(`document.querySelector('.veil #warden-name') && document.querySelectorAll('.veil [role=radiogroup] [role=radio]').length >= 3`, { what: 'the name field and the covens', timeout: 30000 });
       // before the oath, once: how long things take, that chants ripen while Wyrmhodl is closed, and what can be
       // stolen meanwhile (six persona playtesters learned it only after swearing, 2026-10-13)
-      const before = await page.eval(`document.querySelector('.veil [role=dialog]').innerText.replace(/\\s+/g, ' ')`);
-      expect.ok(/minutes to hours/.test(before) && /hours to delve and brew/.test(before), 'the oath says how long things take', before.slice(0, 600));
-      expect.ok(/ripen even while Wyrmhodl is closed/.test(before) && /come back to finish them/.test(before) && /raiders steal it/.test(before), 'the oath says chants ripen while closed, and to brew before raiders steal', before.slice(0, 900));
-      expect.ok(/spare strength/.test(before) && /warm a phone/.test(before), 'the oath says what an open Wyrmhodl asks of this device');
+      const beforeSwearing = await page.eval(`document.querySelector('.veil [role=dialog]').innerText.replace(/\\s+/g, ' ')`);
+      expect.ok(/minutes to hours/.test(beforeSwearing) && /hours to delve and brew/.test(beforeSwearing), 'the oath says how long things take', beforeSwearing.slice(0, 600));
+      expect.ok(/ripen even while Wyrmhodl is closed/.test(beforeSwearing) && /come back to finish them/.test(beforeSwearing) && /raiders steal it/.test(beforeSwearing), 'the oath says chants ripen while closed, and to brew before raiders steal', beforeSwearing.slice(0, 900));
+      expect.ok(/spare strength/.test(beforeSwearing) && /warm a phone/.test(beforeSwearing), 'the oath says what an open Wyrmhodl asks of this device');
       const covens = await page.eval(`[...document.querySelectorAll('.veil [role=radiogroup] [role=radio]')].map((b) => b.innerText.trim().split('\\n')[0])`);
       for (const cv of ['The First Hearth', 'The Gilded Mire', 'Lanternwatch']) expect.ok(covens.some((x) => x.includes(cv)), `coven ${cv} is listed by name`, covens);
       const swearLabel = () => page.eval(`document.querySelector('.veil .btn.gold.block').textContent`);
