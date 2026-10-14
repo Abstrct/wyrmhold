@@ -39,6 +39,8 @@
 }
 /* the right-hand column stops above it (the Atlas's chosen isle, the Skirmish's foe), as the left one does for Ysolde */
 @media (min-width: 721px) { body.raid-alert-up .hud .cols > :last-child:not(:first-child) { max-height: calc(100% - 66px); } }
+/* where the panels stack or scroll (tablets, a phone on its side), the page ends clear of it, as it does of the pill */
+@media (min-width: 721px) and (max-width: 1100px) { body.raid-alert-up .hud { padding-bottom: 76px; } }
 /* the Gate keeps its foot for the wardens abroad and the prologue: there the alert hangs below the bar */
 body[data-route="gate"] .raid-alert { bottom: auto; top: calc(var(--bar-bottom, 72px) + 12px); }
 @media (prefers-reduced-motion: reduce) { .raid-alert { animation: none; } }
