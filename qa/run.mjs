@@ -24,6 +24,7 @@ export const SUITES = [
   ['logic', 'Game logic', 'Catalogue, lore translator, realm mapping, formatting, action rules'],
   ['smoke', 'Smoke & stability', 'Every screen boots clean, draws a sky, throws nothing'],
   ['hold', 'The Hold', 'Roster ↔ isle parity, every beast selectable, card and rites, summoning'],
+  ['raids', 'Raids on your hold', 'Who struck and what was taken, by name: the Chronicle, While you were away, the Defend alert'],
   ['bestiary', 'Bestiary', 'Every rune shows its beast and sheet'],
   ['skirmish', 'Skirmish', 'Both warbands drawn, reach and odds, the raid stepper'],
   ['atlas', 'Sky Atlas & Leyweave & Grimoire', 'Lists, search, cards, wells, sections'],
