@@ -245,8 +245,8 @@ export function harmChronicle(player: () => PlayerState | null, mine: () => bool
 
 /* ── Raiders overhead: an alert on every screen until they leave ───────── */
 
-/** The route the warden is on, whether the address carries it as a path or (an old link) a hash. */
-const routeNow = () => (/^#\//.test(location.hash) ? decodeURIComponent(location.hash.slice(1)) : here());
+/** The route the warden is on. */
+const routeNow = () => here();
 
 let overhead: { fleetId: string; owner: string }[] = [];
 let asked = 0, asking = false, lastIsle = '';
