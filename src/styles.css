@@ -929,3 +929,135 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 .scout-reach { font-size: 13.5px; line-height: 1.4; color: #b9f3e3; }
 /* a blow that would fell your own Wyrm: the button asks again, in the colour of the warning */
 .btn.unleash.deadly { background: linear-gradient(180deg, #7a2418, #4a120c); border-color: rgba(255, 90, 60, .9); color: #ffe1d6; box-shadow: 0 0 0 2px rgba(255, 90, 60, .35); }
+
+/* ── The world behind the panels (2026-10-14) ──────────────────────────────────────────────────────
+ * Phones and tablets hid the sky under their panels. Every screen with a sky now has a "look at the world"
+ * toggle that tucks the panels away (src/ui/world.ts); a phone held sideways keeps one slim bar and stacks its
+ * panels in a column on the right, so the world keeps the left; small meters say their names. */
+.world-ctl { display: inline-flex; align-items: center; gap: 6px; }
+.world-ctl .btn.small { padding: 0 12px; gap: 6px; }
+.world-ctl .btn.small > svg { flex: none; }
+.world-btn[aria-pressed="true"] { background: linear-gradient(180deg, #fff0c2 0%, #ecc96f 42%, #c9963f 100%); border-color: #f6dc94; color: #22140a; text-shadow: none; }
+/* the word beside the eye only where the bar has room for it */
+@media (max-width: 1279px) { body:not(.world-view) .world-ctl .btn.small { width: 36px; padding: 0; } body:not(.world-view) .world-ctl .btn.small .t { display: none; } }
+@media (min-width: 721px) and (max-width: 1100px) { .nav a { padding: 0 9px; } .nav-sep { margin: 0 3px; } .topbar .btn.nag { padding: 0 10px; } .topbar .btn.nag .t { display: none; } }
+.nav-menu { display: none; }
+
+/* the world view: every panel tucked away (Ysolde waits with them); the bar keeps only the world's controls */
+body.world-view .hud > :not(.topbar) { display: none !important; }
+body.world-view .topbar { display: flex !important; justify-content: flex-end; padding: 0; background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
+body.world-view .topbar > :not(.bar-actions), body.world-view .topbar .bar-actions > :not(.world-ctl) { display: none !important; }
+body.world-view .topbar .world-ctl { pointer-events: auto; }
+body.world-view .world-ctl .btn { box-shadow: 0 6px 22px rgba(0, 0, 0, .45); }
+body.world-view .world-ctl .world-home { background: rgba(14, 12, 32, .84); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+body.world-view .path { display: none !important; }
+/* the Skirmish keeps a compact strike at the foot of the sky: the next blow (or ride) and Fight on, so a fight goes on */
+body.world-view[data-route="skirmish"] .hud > .strike-row { display: flex !important; align-self: center !important; width: min(560px, 100%); margin: auto auto 0; }
+body.world-view[data-route="skirmish"] .strike-panel { flex: 0 1 480px; padding: 10px 12px; }
+body.world-view[data-route="skirmish"] .strike-panel > .fc-head, body.world-view[data-route="skirmish"] .strike-panel > .fc-body, body.world-view[data-route="skirmish"] .fc-act .seg { display: none; }
+body.world-view[data-route="skirmish"] .fc-act { margin-top: 0; flex-wrap: nowrap; }
+@media (min-width: 1100px) { body.world-view .sk-hud .strike-row { width: min(560px, calc(100% - 32px)); } }
+
+/* small meters (a phone, upright or sideways): a short name over each number, so none is a riddle */
+@media (max-width: 720px), (min-width: 721px) and (max-height: 560px) {
+  .topbar .meter { min-width: 0; padding: 4px 6px 5px; gap: 2px; justify-content: flex-start; }
+  .topbar .meter .k { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 1px 4px; font: 600 9.5px var(--mono); letter-spacing: 0; text-transform: uppercase; }
+  .topbar .meter .k > span:first-child { flex: 1 0 100%; gap: 3px; white-space: nowrap; overflow: hidden; color: inherit; letter-spacing: 0; }
+  .topbar .meter .k > span:nth-child(2) { font: 700 15px var(--sans); letter-spacing: 0; text-transform: uppercase; color: var(--ink); }
+  .topbar .meter .k .glyph { width: 11px; height: 11px; }
+  .topbar .meter .mk { font-size: 0; }
+  .topbar .meter .mk::after { content: attr(data-short); font-size: 9.5px; }
+  .topbar .meter .v { font-size: 15px; line-height: 1.15; }
+  .topbar .meter .v small { display: none; }
+  .topbar .m-alpha .v small.alpha-glyph { display: inline; font-size: 12px; }
+  .topbar .m-mana .long { display: none; }
+  .topbar .m-mana .short { display: inline; }
+  .topbar .meter .bar { height: 4px; }
+}
+
+/* a phone held upright: a vertical swipe on the sky scrolls the page (it tipped the camera into a bush); a sideways
+   one still turns the isle, and two fingers still pinch */
+@media (max-width: 720px) {
+  .screen > .stage canvas { touch-action: pan-y !important; }
+  .topbar .bar-actions { flex-wrap: nowrap; }
+  .topbar .bar-actions .world-ctl .btn > svg:first-child { display: inline; }
+  body.world-view .hud { min-height: 100vh; min-height: 100dvh; }
+  .topbar .bar-actions .btn.small[data-tut="soulstone"] { max-width: 116px; overflow: hidden; justify-content: flex-start; white-space: nowrap; }
+}
+
+/* a phone held sideways: one slim bar (the roads fold into a menu), and the panels in one column on the right */
+@media (min-width: 721px) and (max-height: 560px) {
+  .topbar, .topbar.with-meters { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; position: relative; z-index: 6; }
+  .topbar .brand { flex: none; min-height: 36px; }
+  .topbar .brand > span { display: none; }
+  .topbar .brand svg { width: 28px; height: 28px; }
+  .topbar .meters { flex: 1 1 auto; min-width: 0; max-width: 440px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .topbar .nav-menu { display: inline-flex; flex: none; max-width: 150px; padding: 0 12px; gap: 6px; }
+  .topbar .nav-menu .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .nav { display: none; }
+  .topbar.nav-open .nav { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; position: absolute; top: calc(100% + 6px); left: var(--menu-x, auto); z-index: 8; min-width: 220px; padding: 8px; gap: 2px; border-radius: 14px; border: 1px solid rgba(232, 200, 114, .45); background: rgba(20, 15, 38, .97); box-shadow: 0 16px 50px rgba(0, 0, 0, .55); }
+  .topbar.nav-open .nav-sep { width: auto; height: 1px; margin: 4px 8px; background: linear-gradient(90deg, transparent, rgba(232, 200, 114, .45), transparent); }
+  .topbar.nav-open .nav a { min-height: 40px; padding: 0 14px; border-radius: 10px; }
+  .topbar.nav-open .nav a.on::after { display: none; }
+  .topbar .bar-actions { flex: none; flex-wrap: nowrap; margin-left: auto; gap: 4px !important; }
+  .topbar .bar-actions .btn.small { padding: 0 10px; font-size: 13.5px; }
+  .topbar .bar-actions .btn.nag .t { display: none; }
+  .topbar .bar-actions .btn.small[data-tut="soulstone"] { max-width: 124px; overflow: hidden; justify-content: flex-start; white-space: nowrap; }
+  body.world-view .world-ctl .btn.small .t { display: inline; }
+
+  /* the panels: a column down the right, the sky on the left; the panel layer scrolls to reach the rest */
+  body[data-route="hold"] .hud, body[data-route="skirmish"] .hud, body[data-route="atlas"] .hud, body[data-route="bestiary"] .hud { --side-w: min(380px, 46vw); padding: 8px 10px; gap: 8px; overflow-y: auto; }
+  body[data-route="hold"] .hud > :not(.topbar), body[data-route="skirmish"] .hud > :not(.topbar), body[data-route="atlas"] .hud > :not(.topbar), body[data-route="bestiary"] .hud > :not(.topbar) { width: var(--side-w); max-width: 100%; align-self: flex-end !important; margin-left: auto; flex: none; }
+  body[data-route="hold"] .cols, body[data-route="skirmish"] .cols, body[data-route="atlas"] .cols, body[data-route="bestiary"] .cols { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 8px; min-height: 0; overflow: visible; }
+  body[data-route="hold"] .cols > *, body[data-route="skirmish"] .cols > *, body[data-route="atlas"] .cols > *, body[data-route="bestiary"] .cols > * { flex: none !important; width: 100%; min-width: 0 !important; max-height: none !important; overflow: visible; }
+  /* the whole strip under the column (its gaps too) belongs to the panels: a drag there scrolls them, never the camera */
+  body[data-route="hold"] .hud::after, body[data-route="skirmish"] .hud::after, body[data-route="atlas"] .hud::after, body[data-route="bestiary"] .hud::after { content: ''; position: fixed; top: 0; bottom: 0; right: 0; width: calc(var(--side-w) + 20px); z-index: -1; pointer-events: auto; }
+  body.world-view .hud::after { display: none; }
+  .hud .panel { padding: 12px 14px; }
+  .hold-omens > * { font-size: 13.5px !important; }
+  /* the Hold: the rites in one slim row near the top, then a few rows of the roster in their own box, then the
+     chosen beast */
+  body[data-route="hold"] .rites { order: 1; flex-wrap: nowrap; padding: 6px; gap: 4px; }
+  body[data-route="hold"] .cols { order: 2; }
+  body[data-route="hold"] .rite { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 4px 2px; gap: 0; }
+  body[data-route="hold"] .rite small { display: none; }
+  body[data-route="hold"] .rite-mark { width: 24px; height: 24px; }
+  body[data-route="hold"] .rite b { font-size: 13px; white-space: nowrap; letter-spacing: 0; }
+  .roster-panel .list { max-height: 228px; }
+  /* the Skirmish: a compact strike first (one row of odds, the big button above the fold), then the war bar, then
+     the two warbands */
+  body[data-route="skirmish"] .strike-row { order: 2; }
+  body[data-route="skirmish"] .warbar-slot { order: 3; }
+  .warbar { padding: 8px 10px 10px 12px; }
+  .wb-title { font-size: 18px; }
+  .wb-line { font-size: 13px; }
+  .wb-main { flex-wrap: wrap; gap: 8px; }
+  .wb-main > .btn { flex: 1 1 100%; }
+  body[data-route="skirmish"] .strike-panel { flex: 1 1 auto; min-width: 0; padding: 10px 12px; }
+  .fc-who { font-size: 15px; }
+  .fc-chips { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+  .fc-chip { padding: 4px 6px; }
+  .fc-chip .k { font-size: 9px; letter-spacing: .02em; white-space: normal; overflow: visible; line-height: 1.15; }
+  .fc-chip .v { font-size: 14px; }
+  .fc-verdict { font-size: 13px; padding: 5px 8px; }
+  .fc-act { margin-top: 8px; gap: 6px; }
+  .btn.unleash { flex: 1 1 150px; min-height: 50px; }
+  .fc-act .seg { flex: 1 1 100%; justify-content: center; }
+  .fc-act .seg .k { display: none; }
+  .fray .fray-list { max-height: 180px; }
+  /* the Bestiary and the Atlas: the chosen one's sheet first, the index after it in a box of its own */
+  .beast-cols > [aria-label="Bestiary index"] { order: 2; max-height: 300px !important; overflow-y: auto !important; }
+  .beast-cols > [aria-label="Beast lore"] { padding: 16px !important; }
+  .beast-cols > [aria-label="Beast lore"] h1 { font-size: 32px !important; }
+  .cols > [aria-label="Wardens"] { order: 2; }
+  .cols > [aria-label="Wardens"] .list { max-height: 240px; }
+}
+
+/* "1 more notice" is pressed by a finger too */
+@media (pointer: coarse) { .omens-more { min-height: 36px; padding: 0 14px; } }
+
+/* tablets and laptops with meters: brand and meters share the first row, the roads and buttons the second, so the
+   meters never wrap into a third row over the isle */
+@media (min-width: 1001px) {
+  .topbar.with-meters { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'brand meters meters' 'nav nav actions'; }
+}

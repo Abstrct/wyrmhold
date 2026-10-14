@@ -13,6 +13,7 @@ import { glyph } from '../ui/glyphs';
 import { onPlunder, proclaim } from '../ui/omens';
 import { claimJob, releaseClaim } from '../core/claims';
 import { cursorTip } from '../ui/tip';
+import { worldView, openSky, fitFor, keepFramed, PHONE_UPRIGHT, PHONE_SIDEWAYS } from '../ui/world';
 import { audio } from '../core/audio';
 import { empire, type OwnedStruct, type PlayerState } from '../game/empire';
 import { act, actionBlock } from '../game/actions';
@@ -31,7 +32,9 @@ interface Told { blow: Blow; at: number; ours: boolean; fresh: boolean }
 export function skirmish(ctx: Ctx): Screen {
   const canvas = h('canvas');
   const tip = cursorTip(canvas);
-  const bar = topbar('/skirmish', ctx.oath, { meters: true });
+  // "look at the world": the panels tuck away, a compact strike stays (styles.css), so the fight goes on in view
+  const world = worldView('skirmish');
+  const bar = topbar('/skirmish', ctx.oath, { meters: true, world: world.el });
   const ours = h('aside', { class: 'glass panel scroll-y sk-ours', 'aria-label': 'Your warband' });
   const theirs = h('aside', { class: 'glass panel col-l scroll-y', 'aria-label': 'Their hold' });
   // the strike panel keeps its button between paints, so a click never lands on a control being replaced
@@ -187,8 +190,25 @@ export function skirmish(ctx: Ctx): Screen {
         const o = mineList.find((s) => s.id === id), t = theirList.find((s) => s.id === id), s = o || t;
         tip.show(s ? `${beastName(s.typeId)} · ${s.health} of ${s.type!.maxHealth} hearts` : null, o ? 'yours · click to strike with it' : 'theirs · click to mark it');
       },
-    }), (c) => { c.mark('a', atk); c.mark('t', mark); c.mark('g', guardId); if (view !== 'all') c.view(view); });
+    }), (c) => { c.mark('a', atk); c.mark('t', mark); c.mark('g', guardId); if (view !== 'all') c.view(view); framer.soon(); });
   }
+
+  /** Keep the gulf in the open sky: between the two sides, under the war bar and above the strike; on a phone held
+   * upright, in the window above the panels; held sideways, left of the panel column. */
+  function reframe() {
+    const ctl = scene?.get();
+    if (!ctl?.frame || !canvas.isConnected) return;
+    const sideL = el.querySelector('.sk-left'), row = el.querySelector('.strike-row');
+    const g = openSky(canvas, {
+      window: matchMedia(PHONE_UPRIGHT).matches ? el.querySelector('.isle-window') : null,
+      tops: [bar.el, status], bottoms: [row],
+      sides: matchMedia(PHONE_SIDEWAYS).matches ? [status, row, sideL, theirs] : [sideL, theirs],
+    });
+    // the two isles were framed for a gap about half the screen wide: stand back when it is narrower
+    if (g) ctl.frame(g.dx, g.dy, fitFor(g, 0.5, 1.4));
+  }
+  const framer = keepFramed(reframe);
+  const offWorld = world.onChange(() => framer.soon());
   let fellAt = 0, remountLater = 0, firstWait = 0, left = false, guardId: string | null = null;
   const openedAt = Date.now();
   let readingSince = 0, slowCheck = 0, readingFor: string | undefined;   // when we began waiting for a sworn warden's warband to be read
@@ -476,7 +496,7 @@ export function skirmish(ctx: Ctx): Screen {
   /* ── painting ─────────────────────────────────────────────────────── */
 
   // the panels rebuild as the ledger moves; keyboard focus survives it
-  function paint() { if (!left) keepFocus(el, paintNow); }
+  function paint() { if (!left) { keepFocus(el, paintNow); framer.soon(); } }
   function paintNow() {
     if (left) return; // a late ledger answer after leaving must not watch anyone again
     const am = `${atk || ''}|${mark || ''}`;
@@ -880,6 +900,6 @@ export function skirmish(ctx: Ctx): Screen {
   paintFray();
   return {
     el, title: 'Skirmish',
-    leave: () => { left = true; clearTimeout(slowCheck); clearTimeout(firstWait); offWon(); offTx(); settleOffs.forEach((f) => f()); pendingClaims.forEach(releaseClaim); clearTimeout(remountLater); offs.forEach((f) => f()); scene?.dispose(); tip.dispose(); bar.dispose(); for (const w of watched) empire.unwatch(w); },
+    leave: () => { left = true; framer.dispose(); offWorld(); world.dispose(); clearTimeout(slowCheck); clearTimeout(firstWait); offWon(); offTx(); settleOffs.forEach((f) => f()); pendingClaims.forEach(releaseClaim); clearTimeout(remountLater); offs.forEach((f) => f()); scene?.dispose(); tip.dispose(); bar.dispose(); for (const w of watched) empire.unwatch(w); },
   };
 }

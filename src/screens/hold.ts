@@ -24,6 +24,7 @@ import { cursorTip } from '../ui/tip';
 import { proclaim } from '../ui/omens';
 import { chantTime } from '../ui/chants';
 import { awayCard, harmChronicle } from '../ui/harm';
+import { worldView, openSky, fitFor, keepFramed, PHONE_UPRIGHT, PHONE_SIDEWAYS } from '../ui/world';
 
 /** An isle by its warden's name, never its ledger mark. */
 const isleName = (planetId: string) => { for (const pl of empire.players.values()) if (pl.planetId === planetId) return `${playerName(pl)}’s isle`; return 'a far isle'; };
@@ -56,7 +57,9 @@ export function hold(ctx: Ctx): Screen {
   };
 
   const canvas = h('canvas');
-  const bar = topbar('/hold', ctx.oath, { meters: true });
+  // "look at my world": the panels tuck away; once the camera wanders, a way back to the whole isle
+  const world = worldView('hold', { home: () => scene.get()?.home() });
+  const bar = topbar('/hold', ctx.oath, { meters: true, world: world.el });
   const chants = chantsPanel();
   chants.el.setAttribute('data-tut', 'chants');
   const ownHold = () => { const p = player(); return !!p && !watching && empire.commands(p.playerId); };
@@ -83,7 +86,7 @@ export function hold(ctx: Ctx): Screen {
       rites));
 
   const tip = cursorTip(canvas);
-  const scene = mountScene(canvas, (c) => K.hold(c, { units: [], onPick: (id: string | null) => pick(id), onHover: (id: string | null) => {
+  const scene = mountScene(canvas, (c) => K.hold(c, { units: [], onPick: (id: string | null) => pick(id), onView: (moved: boolean) => world.moved(moved), onHover: (id: string | null) => {
     const s = id ? player()?.structs.get(id) : undefined;
     tip.show(s?.type ? beastName(s.typeId) : null, watching ? 'theirs' : 'click to see what it can do');
   } }), () => paint());
@@ -254,9 +257,10 @@ export function hold(ctx: Ctx): Screen {
         mine && wallet.unlocked ? 'Its chant is being sung in Incantations below. It wakes on its own when the chant lands.' : 'Its summoning is not finished yet.') : '',
       // no rite heals: a wounded beast's hearts are what it has left, and the card says so plainly
       s.built && s.health < t.maxHealth ? h('p', { class: 'path-wait wound-note', style: { marginTop: '10px' } }, h('span', { class: 'k' }, 'Wounded'),
-        `${s.health} of ${t.maxHealth} hearts. ${NO_MENDING}`) : '',
-      h('p', { style: { margin: '12px 0 0', fontSize: '15px', color: '#cfc5dd' } }, L.tale));
-    if (!mine) { card.append(h('p', { class: 'faint', style: { marginTop: '12px', fontSize: '14px' } }, 'You are watching. Only its warden can command it.')); return; }
+        `${s.health} of ${t.maxHealth} hearts. ${NO_MENDING}`) : '');
+    // its tale follows what it can do: on a short screen the card's buttons (the Wyrm's realms) stay in view
+    const tale = h('p', { class: 'card-tale', style: { margin: '12px 0 0', fontSize: '15px', color: '#cfc5dd' } }, L.tale);
+    if (!mine) { card.append(tale, h('p', { class: 'faint', style: { marginTop: '12px', fontSize: '14px' } }, 'You are watching. Only its warden can command it.')); return; }
     const row = h('div', { class: 'row', style: { marginTop: '14px' } });
     // Safe rites lead; the ones that cannot be taken back wait behind "More".
     const more = h('div', { class: 'row', style: { marginTop: '10px' } });
@@ -277,8 +281,6 @@ export function hold(ctx: Ctx): Screen {
       card.append(h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, n.text),
         n.label && n.run ? h('button', { type: 'button', class: 'linkish', onclick: () => { cardNote = null; n.run!(); paintCard(player()); } }, n.label) : null));
     }
-    // the card is rebuilt as the ledger moves: remember which "More" the warden left open
-    if (more.childElementCount) card.append(h('details', { class: 'more', open: moreOpen.has(s.id), ontoggle: (e: Event) => { if ((e.target as HTMLDetailsElement).open) moreOpen.add(s.id); else moreOpen.delete(s.id); } }, h('summary', { 'data-key': 'more:' + s.id }, 'More'), more));
     if (s.typeId === 1 && s.built) {
       card.append(h('div', { role: 'group', 'aria-label': 'Soar to a realm', style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(243,235,221,.1)' } },
         h('p', { class: 'label', style: { margin: '0 0 4px' } }, `Soar to · ${t.moveCharge} breath`),
@@ -289,6 +291,9 @@ export function hold(ctx: Ctx): Screen {
             onclick: () => { if (!here) rite(p, () => act.move(p, s, 'fleet', AMBIT_OF_REALM[r], 0), true, s.id); } }, REALM_NAME[r]);
         }))));
     }
+    card.append(tale);
+    // the card is rebuilt as the ledger moves: remember which "More" the warden left open
+    if (more.childElementCount) card.append(h('details', { class: 'more', open: moreOpen.has(s.id), ontoggle: (e: Event) => { if ((e.target as HTMLDetailsElement).open) moreOpen.add(s.id); else moreOpen.delete(s.id); } }, h('summary', { 'data-key': 'more:' + s.id }, 'More'), more));
   }
 
   // the rites are rebuilt only when what they say changes: a glow from Ysolde, a hover or a
@@ -436,21 +441,25 @@ export function hold(ctx: Ctx): Screen {
     }
   }
 
-  /** Keep the isle centred in the open sky between the panels, not behind the right-hand card. */
+  /** Keep the isle (or the chosen beast) centred in the open sky: between the panel columns, below the bar and above
+   * the rites; on a phone held upright, in the window above the panels; held sideways, left of the panel column. */
   function reframe() {
     const ctl = scene.get();
     if (!ctl || !canvas.isConnected) return;
-    if (!matchMedia('(min-width: 721px)').matches) { ctl.frame(0); return; }
-    const c = canvas.getBoundingClientRect();
-    const left = (el.querySelector('.cols > .col-l') as HTMLElement | null)?.getBoundingClientRect();
     const rightCol = el.querySelector('.cols > .col-r') as HTMLElement | null;
-    const right = rightCol && [...rightCol.children].some((k) => !(k as HTMLElement).hidden && (k as HTMLElement).offsetHeight > 0) ? rightCol.getBoundingClientRect() : null;
-    const l = left && left.width ? left.right : c.left, r = right && right.width ? right.left : c.right;
-    ctl.frame(Math.max(-c.width / 4, Math.min(c.width / 4, (l + r) / 2 - (c.left + c.width / 2))));
+    const right = rightCol && [...rightCol.children].some((k) => !(k as HTMLElement).hidden && (k as HTMLElement).offsetHeight > 0) ? rightCol : null;
+    const g = openSky(canvas, {
+      window: matchMedia(PHONE_UPRIGHT).matches ? el.querySelector('.isle-window') : null,
+      tops: [bar.el], bottoms: [rites],
+      sides: matchMedia(PHONE_SIDEWAYS).matches ? [rosterPanel, right, banner, omens, rites] : [rosterPanel, right],
+    });
+    // the isle was framed for a gap about 45% of the screen wide: stand back when the gap is narrower
+    if (g) ctl.frame(g.dx, g.dy, fitFor(g, 0.45, 1.4));
   }
-  // the Stage resizes on its own observer: reframe after it has, two frames on
-  const onResize = () => requestAnimationFrame(() => requestAnimationFrame(reframe));
-  window.addEventListener('resize', onResize);
+  // the Stage resizes on its own observer: reframe after it has, two frames on (and when the page or panels scroll,
+  // and when the panels are tucked away or brought back)
+  const framer = keepFramed(reframe);
+  const offWorld = world.onChange(() => framer.soon());
 
   let toured = false;
   /** Whose beasts stand on the isle and whose rites the Chronicle tells. */
@@ -485,7 +494,7 @@ export function hold(ctx: Ctx): Screen {
       // each unit carries its name, so the isle can label what stands on it
       const named = unitsOf(p).map((u) => ({ ...u, label: beastName(u.type) + (u.building ? ' · summoning' : u.offline ? ' · slumbering' : '') }));
       ctl.sync(named, first && !hatch);
-      requestAnimationFrame(reframe);
+      framer.soon();
       if (hatch) setTimeout(() => proclaim('Your Elder Wyrm hatches', 'Bound to you alone. Every raid you ride, you ride on its back.', 'gold'), 1800);
       first = false;
       const shield = num(p.planet?.planetAttributes?.planetaryShield);
@@ -511,7 +520,7 @@ export function hold(ctx: Ctx): Screen {
 
   return {
     el, title: watching ? 'Watching a hold' : 'The Hold',
-    leave: () => { window.removeEventListener('resize', onResize); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); away.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
+    leave: () => { framer.dispose(); offWorld(); world.dispose(); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); away.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
   };
 }
 
