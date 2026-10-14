@@ -88,7 +88,7 @@ export default async function (t, ctx) {
     try {
       await openGame(page, ctx.app.url, '#/hold');
       await swearWithWords();
-      await holdReady();
+      await holdReady(); await awake(page);
       // the first visit in this browser only starts the sketch of the hold
       await page.waitFor(`localStorage.getItem('wyrmhold.away.${me.pid}')`, { what: 'the first sketch of the hold', timeout: 90000 });
       expect.ok(await page.eval(`document.querySelector('.away-card').hidden`), 'nothing to tell on a first visit');
@@ -107,7 +107,8 @@ export default async function (t, ctx) {
         .catch(async (e) => { throw new (await import('../lib/report.mjs')).Failure(e.message, [await page.eval(`document.querySelector('.gate-welcome')?.textContent || ''`), await page.eval(`localStorage.getItem('wyrmhold.raidlog.${me.pid}')`)]); });
       expect.eq(await page.eval(`document.querySelector('.gate-welcome').getAttribute('aria-live')`), 'polite', 'the welcome is heard politely');
       await page.screenshot(c.evidencePath('gate-welcome.png'));
-      await go(page, '#/hold');
+      // (the isle wakes first: under software rendering a page compiling its sky answers nothing for a while)
+      await go(page, '#/hold'); await awake(page);
       await page.waitFor(`(() => { const e = document.querySelector('.away-card'); return e && !e.hidden && /Grimwald/.test(e.innerText) && /Raid them back/.test(e.innerText); })()`, { what: 'the While-you-were-away card', timeout: 90000 })
         .catch(async (e) => { throw new (await import('../lib/report.mjs')).Failure(e.message, [await page.eval(`(document.querySelector('.away-card') || {}).outerHTML || 'no card'`)]); });
       const card = await page.eval(`const e = document.querySelector('.away-card'); return { text: e.innerText, role: e.getAttribute('role'), head: document.getElementById(e.getAttribute('aria-labelledby'))?.textContent, back: [...e.querySelectorAll('.raid-back')].map((b) => b.getAttribute('aria-label')) }`);
@@ -134,7 +135,7 @@ export default async function (t, ctx) {
       // told once: a reload does not tell it again
       await page.goto(ctx.app.url + '?again=2#/hold', { timeout: 120000 });
       await page.waitFor(`!document.getElementById('boot') || document.getElementById('boot').classList.contains('gone')`, { what: 'the boot veil', timeout: 90000 });
-      await holdReady();
+      await holdReady(); await awake(page);
       await page.waitFor(`/Grimwald’s Kraken felled your Elder Wyrm/.test((document.querySelector('[aria-label=Chronicle]') || {}).innerText || '')`, { what: 'the Chronicle to be read back', timeout: 60000 });
       await sleep(4000);
       expect.ok(await page.eval(`document.querySelector('.away-card').hidden`), 'the same news is not told twice');
