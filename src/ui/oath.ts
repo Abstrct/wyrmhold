@@ -97,7 +97,7 @@ export function openOath(start?: unknown) {
     return [
       h('p', { style: { marginTop: '14px' } }, `These ${words.length} soul-words are the only way back to your warden if this browser forgets you. Write them down in order, on paper, somewhere safe.`),
       h('div', { class: 'words', 'data-raw': '' }, ...words.map((w, i) => h('span', null, h('i', null, String(i + 1)), w))),
-      h('p', { class: 'warn-line' }, icon(ICON.warn, 15), 'Anyone who reads these can take everything. Wyrmhold will never ask for them.'),
+      h('p', { class: 'warn-line' }, icon(ICON.warn, 15), 'Anyone who reads these can take everything. Wyrmhodl will never ask for them.'),
       h('div', { class: 'row', style: { marginTop: '10px', gap: '8px' } },
         h('button', { type: 'button', class: 'btn small', onclick: () => {
           navigator.clipboard?.writeText(revealed).then(() => toast('Copied. Paste them somewhere private, then copy something else over them.', 'player', 5000), () => toast('This browser would not copy. Write them by hand.', 'warn'));
@@ -281,7 +281,7 @@ export function openOath(start?: unknown) {
     if (mode === 'choose') {
       body.append(head('The Oath', 'Bind your soulstone'),
         road(0),
-        h('p', null, 'Your soulstone is your name in the sky. It stays sealed in this browser; Wyrmhold only asks it to set its seal on the rites you choose.'),
+        h('p', null, 'Your soulstone is your name in the sky. It stays sealed in this browser; Wyrmhodl only asks it to set its seal on the rites you choose.'),
         h('div', { class: 'stack', style: { marginTop: '14px' } },
           h('button', { type: 'button', class: 'choice', disabled: busy, onclick: async () => {
             busy = true; paint();

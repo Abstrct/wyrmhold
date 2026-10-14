@@ -1,8 +1,8 @@
-# Wyrmhold
+# Wyrmhodl
 
 *When the sky broke, alpha fell like rain.*
 
-Wyrmhold is a sky-realm of floating isles above a sea of cloud. Bind a soulstone, swear to a coven, seek your isle and hatch your Elder Wyrm. Delve wildroot from your isle's marrow and brew it into **alpha**, the first light: it wakes your springs, calls beasts out of the circle, and once brewed can never be stolen. Then read the sky, ride out, and take what other wardens leave unbrewed.
+Wyrmhodl is a sky-realm of floating isles above a sea of cloud. Bind a soulstone, swear to a coven, seek your isle and hatch your Elder Wyrm. Delve wildroot from your isle's marrow and brew it into **alpha**, the first light: it wakes your springs, calls beasts out of the circle, and once brewed can never be stolen. Then read the sky, ride out, and take what other wardens leave unbrewed.
 
 Every warden you meet is a real player, and every rite you speak is sealed with your own soulstone and written into the ledger.
 
@@ -32,8 +32,8 @@ A first visit begins with **the Prologue**. Then **Ysolde**, a grey owl spirit, 
 | Skirmish | ride out, mark, unleash, plunder |
 | Grimoire | the old tale, the rites, the laws of war |
 
-Your soulstone stays sealed in your browser. Wyrmhold only ever asks it to set its seal on a rite.
+Your soulstone stays sealed in your browser. Wyrmhodl only ever asks it to set its seal on a rite.
 
 ## For builders
 
-How Wyrmhold binds to the network it plays on, where its engine came from, and how to run it against a private chain: `../wyrmhold-forge/BUILDERS.md`, kept beside this folder.
+How Wyrmhodl binds to the network it plays on, where its engine came from, and how to run it against a private chain: `../wyrmhold-forge/BUILDERS.md`, kept beside this folder.

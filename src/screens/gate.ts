@@ -48,7 +48,7 @@ export function gate(ctx: Ctx): Screen {
     h('div', { class: 'hud gate-hud' }, bar.el),
     h('main', { class: 'gate-main' },
       h('p', { class: 'eyebrow rise' }, 'When the sky broke, alpha fell like rain'),
-      h('h1', { class: 'gate-title rise', style: { animationDelay: '.15s' } }, 'Wyrmhold'),
+      h('h1', { class: 'gate-title rise', style: { animationDelay: '.15s' } }, 'Wyrmhodl'),
       h('p', { class: 'rise', style: { margin: '22px 0 0', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'clamp(22px, 2.6vw, 32px)', animationDelay: '.3s' } }, 'Bind beasts. Brew alpha. Hold the sky.'),
       h('p', { class: 'rise', style: { margin: '18px 0 0', fontSize: '19px', color: '#cfc5dd', maxWidth: '520px', animationDelay: '.45s' } },
         'The shards of the old sky drift above the cloud-sea, and every one is held by a living warden. Alpha — the first light — still seeps through their roots. Raise a wyrm, delve the wildroot, brew it into alpha, and take the sky from those who sleep.'),

@@ -110,7 +110,7 @@ export function codex(ctx: Ctx): Screen {
       section('Beasts and hallows', table(['Name', 'Realm', 'Vigor', 'Mana', 'Chant', 'Ward-craft'], beasts, ['f'])),
       section('The laws of war', h('div', { class: 'grid-cards', style: { marginTop: '16px' } }, ...LAWS.map(([k, v]) => h('div', { class: 'card-btn', style: { cursor: 'default' } }, h('b', null, k), h('span', { class: 'muted', style: { fontSize: '15px' } }, v))))),
       section('The warden’s oath', h('ul', { style: { marginTop: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '17px', color: '#ddd4ea' } },
-        h('li', null, 'Your soulstone never leaves this browser. Wyrmhold asks it to set its seal on a rite; it never sends it anywhere.'),
+        h('li', null, 'Your soulstone never leaves this browser. Wyrmhodl asks it to set its seal on a rite; it never sends it anywhere.'),
         h('li', null, 'No rite is spoken until you speak it, and the Hold watches the sky after every rite before it tells you what happened.'),
         h('li', null, 'Before every summoning, your spare mana is weighed. If the leylines cannot bear it, the circle is not offered.'),
         h('li', null, 'Chants run beside you on your own hands — every thread and lantern of this machine — and are spoken the bell they ripen.')))));

@@ -1,4 +1,4 @@
-/* A small chime box: the ledger modules call audio.stinger() on big moments. Wyrmhold answers
+/* A small chime box: the ledger modules call audio.stinger() on big moments. Wyrmhodl answers
  * with a struck bell, synthesised (no samples), and only after the warden has touched the page. */
 class Chimes {
   private ctx: AudioContext | null = null;

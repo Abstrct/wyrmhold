@@ -1,5 +1,5 @@
 // @ts-nocheck
-/* WyrmKit — the living world of Wyrmhold.
+/* WyrmKit — the living world of Wyrmhodl.
  * Procedural sky-isles, beasts and rites, drawn with three.js. The look (light, sky, cloud,
  * post) lives in look.js, the land in land.js, the great beasts in beasts.js; this file holds
  * the bestiary index and the scenes. Every scene returns a small controller the page drives. */

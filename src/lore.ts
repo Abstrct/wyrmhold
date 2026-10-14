@@ -1,4 +1,4 @@
-/* The Grimoire in code: how Wyrmhold names every thing the ledger knows. Mechanics come from the
+/* The Grimoire in code: how Wyrmhodl names every thing the ledger knows. Mechanics come from the
  * catalogue (src/data/catalogue.ts); only the words change here. Nothing the warden reads should
  * ever speak another world's tongue: everything shown passes through speak(). */
 import { typeOf, type Ambit, type StructType } from './data/catalogue';

@@ -37,11 +37,11 @@ const BASE_HEADERS = {
   'timing-allow-origin': '*',
 };
 
-/** Vite's hashed assets never change; pages, the service worker, the manifest, robots and the sitemap
+/** Vite's hashed assets never change; pages, the service worker, the manifest, robots, the sitemap and llms.txt
  * always revalidate; art, sound and fonts are unhashed but change only with a deploy. */
 function cacheControl(rel) {
   if (rel.startsWith('assets/')) return 'public, max-age=31536000, immutable';
-  if (/\.html$|^(sw\.js|manifest\.webmanifest|robots\.txt|sitemap\.xml)$/.test(rel)) return 'no-cache';
+  if (/\.html$|^(sw\.js|manifest\.webmanifest|robots\.txt|sitemap\.xml|llms\.txt)$/.test(rel)) return 'no-cache';
   if (/^(img|sound|fonts)\//.test(rel)) return 'public, max-age=604800';
   return 'public, max-age=3600';
 }

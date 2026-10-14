@@ -16,7 +16,7 @@ export default async function (t, ctx) {
       const st = await stage(page);
       if (state === 'awake') { expect.ok(st && st.finite, 'camera is finite', st); }
       const title = await page.eval('document.title');
-      expect.ok(/Wyrmhold/.test(title), 'title names the game: ' + title);
+      expect.ok(/Wyrmhodl/.test(title), 'title names the game: ' + title);
       const seen = await lookAtStage(page, c.evidencePath('after-boot.png'));
       if (state === 'awake') expect.ok(seen.mean > 12 && seen.dark < 0.9, `the sky is drawn (mean ${seen.mean.toFixed(1)}, ${Math.round(seen.dark * 100)}% black)`);
       if (state === 'none' && route !== '#/grimoire') c.warn('no stage canvas on this screen');

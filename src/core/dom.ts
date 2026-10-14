@@ -1,5 +1,5 @@
 /* The few DOM helpers the ledger modules (borrowed from the ledger client) ask for,
- * dressed for Wyrmhold: a herald's scroll for toasts and a sealed-oath dialog for confirms. */
+ * dressed for Wyrmhodl: a herald's scroll for toasts and a sealed-oath dialog for confirms. */
 import { speak } from '../lore';
 
 type Kind = '' | 'player' | 'enemy' | 'warn';

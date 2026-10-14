@@ -2,7 +2,7 @@
   "name": "wyrmhold",
   "version": "0.1.0",
   "private": true,
-  "description": "Wyrmhold: bind beasts, brew alpha, hold the broken sky — drawn in three.js.",
+  "description": "Wyrmhodl: bind beasts, brew alpha, hold the broken sky — drawn in three.js.",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -19,7 +19,7 @@ export function chantsPanel() {
   const el = h('section', { class: 'glass panel', 'aria-label': 'Incantations' },
     h('div', { class: 'row between', style: { marginBottom: '10px' } }, h('h2', { class: 'display', style: { fontSize: '19px' } }, 'Incantations'), meta), list,
     // chants are sung by this browser: a warden who closes it should know they pause
-    h('p', { class: 'faint', style: { margin: '10px 0 0', fontSize: '12px' } }, 'Sung by this browser while Wyrmhold is open.'));
+    h('p', { class: 'faint', style: { margin: '10px 0 0', fontSize: '12px' } }, 'Sung by this browser while Wyrmhodl is open.'));
   const paint = () => {
     clear(list);
     const tasks = pow.active.filter((t) => t.account >= 0);

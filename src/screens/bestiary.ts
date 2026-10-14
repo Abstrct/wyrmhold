@@ -1,5 +1,5 @@
 /* The Summoning Circle: every beast and hallow the ledger knows, on a rune dais. Stats are the
- * chain's own (src/data/catalogue.ts); only the names and tales are Wyrmhold's. */
+ * chain's own (src/data/catalogue.ts); only the names and tales are Wyrmhodl's. */
 import { h, clear } from '../core/dom';
 import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';

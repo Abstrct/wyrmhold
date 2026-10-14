@@ -75,7 +75,7 @@ const STEPS: Step[] = [
     done: 'The circle is drawn. Now the summoning must be sung.', test: (p) => owns(p, 14) },
   { id: 'chant', title: 'Let the chant ripen', route: '#/hold', glow: 'chants',
     say: 'Every summoning must be sung. Your Hold sings it for you with this computer’s spare strength, and it gets easier every moment.',
-    do: 'Wait for the Incantations bar to fill; it says roughly how long. Explore meanwhile, but keep Wyrmhold open: the singing happens here.',
+    do: 'Wait for the Incantations bar to fill; it says roughly how long. Explore meanwhile, but keep Wyrmhodl open: the singing happens here.',
     done: 'Heard! The Delver wakes and will dig on its own now.', test: (p) => owns(p, 14, true), slow: true },
   { id: 'cauldron', title: 'Raise a Dawn Cauldron', route: '#/hold', glow: 'summon',
     say: 'Raiders can carry off wildroot. A Dawn Cauldron brews it into alpha, and brewed alpha can never be taken.',

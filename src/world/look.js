@@ -1,5 +1,5 @@
 // @ts-nocheck
-/* The Look — how Wyrmhold's sky is lit. One stage per scene: an HDR pass chain (bloom, grade,
+/* The Look — how Wyrmhodl's sky is lit. One stage per scene: an HDR pass chain (bloom, grade,
  * grain), a painted sky with its own sun, an opaque sea of lit cloud, banks of cumulus that
  * stand between the isles, and the shared stylised material every rock, leaf and scale wears
  * (wrapped light, a rim from the key, wind in the leaves). Each scene picks a mood from MOODS. */

@@ -140,7 +140,7 @@ export default async function (t, ctx) {
     await awake(page);
     await page.waitFor(`document.querySelectorAll('.marquee a').length > 0`, { what: 'the ticker', timeout: 20000 });
     const r = await page.eval(`({ h1: document.querySelector('h1').textContent, moves: [...document.querySelectorAll('.how li b')].map((b) => b.textContent), enter: document.querySelector('[data-tut=begin]').textContent, ticker: document.querySelectorAll('.marquee a').length, count: document.querySelector('.gate-foot .mono').textContent })`);
-    expect.eq(r.h1, 'Wyrmhold', 'title');
+    expect.eq(r.h1, 'Wyrmhodl', 'title');
     expect.eq(JSON.stringify(r.moves), JSON.stringify(['Raise', 'Brew', 'Raid']), 'three moves');
     expect.includes(r.enter, 'Swear the oath', 'the stranger’s call');
     expect.gte(r.ticker, withIsle, 'wardens in the ticker');

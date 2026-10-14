@@ -1,4 +1,4 @@
-# The Proving Ground — Wyrmhold's QA framework
+# The Proving Ground — Wyrmhodl's QA framework
 
 > One player wrote: *"The game seems to have issues with my Ghoul Archer. It doesn't appear on the map and
 > when I click it from the list that I own, it black screens."* That report was true, it had been true for
@@ -25,20 +25,20 @@ screenshots. The exit code is non-zero when any S0 or S1 check fails.
 
 ---
 
-## 1. What a game studio tests, and what that means for Wyrmhold
+## 1. What a game studio tests, and what that means for Wyrmhodl
 
 A studio's QA is organised around *what can go wrong for a player*, not around the code. The pillars below
-are the ones every shipped game is tested against; under each is what it means for Wyrmhold specifically
+are the ones every shipped game is tested against; under each is what it means for Wyrmhodl specifically
 and which suite carries it.
 
-| Pillar | The question | For Wyrmhold | Suite |
+| Pillar | The question | For Wyrmhodl | Suite |
 |---|---|---|---|
 | **Art & asset validation** | Does every model load, measure, animate and render? | 22 procedural beasts and hallows plus Ysolde, each built from code at runtime. A NaN in one vertex sank the Ghoul Archer. Every body is built in a real WebGL context, scanned for non-finite coordinates at rest and after animation, measured against a size and triangle budget, then rendered on the dais with shader output watched for warnings. | `assets` |
 | **Game logic & data integrity** | Are the rules and the data the client ships correct and consistent? | The struct catalogue (22 types), the lore names, the realm↔ambit mapping the scenes use, the reach bitmasks, the action rules (`verbsFor`, `buildBlock`, `freeCircle`), unit placement (`unitsOf`), event routing, formatting, the chant difficulty clock, and `--net` drift against the public ledger. | `logic` |
 | **Smoke & stability** | Does every screen boot, draw and leave cleanly? | Eight entry points as a stranger and seven as a sworn warden: no thrown error, no console error, the sky's first frame drawn and not black, the camera finite, deep links honoured, and a walk of every road twice leaving no stray scene, canvas, tag box or dialog. | `smoke` |
 | **Feature / functional** | Does each screen do what it says? | The Hold (roster ↔ isle parity, selection, the card, filters, rites, Summon, Guard, omens, watching, crowds, unknown types), the Bestiary (22 runes), the Skirmish (both warbands, reach vs the catalogue, the war bar, dodge odds as the ledger rolls them, guards named, riding out, Unleash and Fight on as real rites, the fray, the plunder chant waiting on their Wyrm, defending), the Atlas, the Leyweave and the Grimoire. | `hold` `bestiary` `skirmish` `atlas` |
 | **Player journeys (end to end)** | Can a new player get from nothing to playing? | A browser that has never seen the game: the prologue, the oath start to finish against a mock coven scribe, the first Hold with the tour and Ysolde's path, a summoning that queues, signs, broadcasts and appears on the isle, the Chronicle, and forgetting the soulstone. | `flows` |
-| **Clarity, text & localisation** | Does the player understand what they read? | Wyrmhold has a strict tongue: never a ledger id, never an engine word (struct, planet, fleet, wallet…), never `undefined`. Every screen's visible text is linted, every control must have a name, every meter must explain itself, the link state must speak plainly, help and glosses must open and close. | `clarity` |
+| **Clarity, text & localisation** | Does the player understand what they read? | Wyrmhodl has a strict tongue: never a ledger id, never an engine word (struct, planet, fleet, wallet…), never `undefined`. Every screen's visible text is linted, every control must have a name, every meter must explain itself, the link state must speak plainly, help and glosses must open and close. | `clarity` |
 | **Accessibility & input** | Can a player who cannot see the sky, or use a mouse, still play? | Landmarks and names, the canvas hidden from assistive tech, Tab reaching nav, roster and rites, Enter picking a beast, modal dialogs that close on Escape and give focus back, polite heralds that never stack past three, reduced motion, a tap on the sky picking a beast, and two fingers pinching to zoom (in and out, never picking a beast). | `a11y` |
 | **Compatibility: screens & devices** | Does it fit on what players own? | Six viewports from a 1440 desktop to a 390 phone and a landscape phone: no sideways scroll, the primary control on screen, touch targets ≥36px, no clipped text, the roster showing a useful number of rows, and a live resize desktop → phone → desktop. | `responsive` |
 | **Data channels** | Does the client read from the right place, and fall back when it can't? | A sworn warden signed in at their own coven's API with a valid seal through the relay; the Atlas omens, the Leyweave's wells and tithes, and an isle's raiders each read from the API in a few reads (and none from the node); a lagging indexer passed over for the node; GRASS followed from guild.json, patching the Atlas live, re-reading a cleared wildroot, reading the sky whole after a gap, and waking the empire while the node's feed is down. The mock ledger speaks NATS at `/grass` (`ledger.emitGrass(subject, payload)`) and the Guild API's read routes, checking each sign-in's signature. | `data` |

@@ -28,7 +28,7 @@ export class Report {
   write(meta = {}) {
     const s = this.summary();
     writeFileSync(join(this.outDir, 'report.json'), JSON.stringify({ meta, summary: s, notes: this.notes, results: this.results }, null, 1));
-    const lines = [`# Wyrmhold QA report`, '', `${new Date().toISOString()} · ${meta.app || ''} · ${meta.chrome || ''}`, '',
+    const lines = [`# Wyrmhodl QA report`, '', `${new Date().toISOString()} · ${meta.app || ''} · ${meta.chrome || ''}`, '',
       `| total | pass | fail | warn | skip | blocking |`, `|---|---|---|---|---|---|`, `| ${s.total} | ${s.pass} | ${s.fail} | ${s.warn} | ${s.skip} | ${s.blocking} |`, ''];
     const pillars = [...new Set(this.results.map((r) => r.pillar))];
     for (const p of pillars) {

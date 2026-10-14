@@ -1,4 +1,4 @@
-/* Wyrmhold boots: the ledger's pulse (live), the soulstone (wallet), the empire it commands,
+/* Wyrmhodl boots: the ledger's pulse (live), the soulstone (wallet), the empire it commands,
  * the chant engine (pow) and the rite queue (txq) — and
  * then the realm's screens, routed by hash. */
 import './styles.css';
@@ -35,6 +35,8 @@ const app = document.getElementById('app')!;
 const bootStep = document.getElementById('boot-step')!;
 let current: Screen | null = null;
 let routing = 0;
+// the Gate keeps the page's own title (seo/seo.ts), the one search results show
+const HOME_TITLE = document.title || 'Wyrmhodl';
 
 function parse(): { name: string; param?: string; path: string } {
   const raw = (location.hash || '#/').replace(/^#\/?/, '');
@@ -54,7 +56,7 @@ async function route() {
   current = make(ctx);
   app.append(current.el);
   current.enter?.();
-  document.title = current.title ? `${current.title} · Wyrmhold` : 'Wyrmhold';
+  document.title = current.title ? `${current.title} · Wyrmhodl` : HOME_TITLE;
 }
 
 /* The herald: rites that land or fail, told once, wherever the warden is. */
@@ -93,6 +95,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function boot() {
+  // the page ships a gold theme-color for link cards (Discord's embed stripe); the browser's own chrome is night
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0e1a');
   guardTheVeil();
   bootStep.textContent = 'Reaching the ledger…';
   live.start();

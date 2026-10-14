@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* The proving ground: Wyrmhold's QA framework. Starts a mock ledger, the game, and headless Chrome,
+/* The proving ground: Wyrmhodl's QA framework. Starts a mock ledger, the game, and headless Chrome,
  * then runs every suite (or the ones named) and writes a report.
  *
  *   node qa/run.mjs                  # everything
