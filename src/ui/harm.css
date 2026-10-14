@@ -37,6 +37,8 @@
   /* the page scrolls clear of both */
   body.raid-alert-up .hud { padding-bottom: 150px; }
 }
+/* pages that scroll (the Leyweave, the Grimoire) end clear of it, so their last line and button stay reachable */
+body.raid-alert-up .screen.scrolls > main { padding-bottom: 96px !important; }
 /* the right-hand column stops above it (the Atlas's chosen isle, the Skirmish's foe), as the left one does for Ysolde */
 @media (min-width: 721px) { body.raid-alert-up .hud .cols > :last-child:not(:first-child) { max-height: calc(100% - 66px); } }
 /* where the panels stack or scroll (tablets, a phone on its side), the page ends clear of it, as it does of the pill */

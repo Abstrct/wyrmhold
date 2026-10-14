@@ -666,7 +666,7 @@ dl.facts dt { font-size: 11px; }
 .codex-jumps { margin-top: 18px; gap: 6px 14px; font-size: 15px; }
 .codex-jumps .label { margin-right: 2px; }
 /* the jump links are touch targets too: a finger needs more than a line of text */
-.codex-jumps a, .codex-jumps button { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; }
+.codex-jumps a, .codex-jumps button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; }
 @media (min-width: 721px) { body.has-pill .hud > .rites { align-self: flex-end; } }
 /* trouble told beside the control that caused it */
 .inline-err { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 122, 77, .5); background: rgba(60, 20, 16, .55); font-size: 14px; line-height: 1.4; color: var(--ember-ink); }
@@ -1035,7 +1035,12 @@ body.world-view[data-route="skirmish"] .fc-act { margin-top: 0; flex-wrap: nowra
   .wb-main > .btn { flex: 1 1 100%; }
   body[data-route="skirmish"] .strike-panel { flex: 1 1 auto; min-width: 0; padding: 10px 12px; }
   .fc-who { font-size: 15px; }
-  .fc-chips { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+  /* six odds in one row (Lands, Deals, Leaves it at, Hits back, Their blows, Breath), so the big button stays above the fold */
+  .fc-chips { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+  .fc-chip .s { display: none; }
+  /* what can strike your Wyrm: two lines here (a screen reader still hears it whole); the red danger block stays whole */
+  .fc-exposed { font-size: 12.5px; line-height: 1.35; margin-top: 6px; }
+  .fc-exposed > span { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .fc-chip { padding: 4px 6px; }
   .fc-chip .k { font-size: 9px; letter-spacing: .02em; white-space: normal; overflow: visible; line-height: 1.15; }
   .fc-chip .v { font-size: 14px; }
@@ -1055,6 +1060,8 @@ body.world-view[data-route="skirmish"] .fc-act { margin-top: 0; flex-wrap: nowra
 
 /* "1 more notice" is pressed by a finger too */
 @media (pointer: coarse) { .omens-more { min-height: 36px; padding: 0 14px; } }
+/* chips are pressed by fingers too: the Hold's filters, the realm chips, "Chant gently" */
+@media (pointer: coarse), (max-width: 1180px) { .chip { min-height: 36px; } }
 
 /* tablets and laptops with meters: brand and meters share the first row, the roads and buttons the second, so the
    meters never wrap into a third row over the isle */

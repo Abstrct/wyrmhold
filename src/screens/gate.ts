@@ -67,7 +67,7 @@ export function gate(ctx: Ctx): Screen {
         how('3', 'Raid', 'Ride out and plunder the isles of wardens who sleep.'))),
     h('footer', { class: 'gate-foot' },
       h('div', { class: 'row', style: { padding: '0 clamp(16px, 4vw, 48px) 10px', gap: '10px' } }, h('span', { class: 'link-dot live' }), h('span', { class: 'eyebrow' }, 'Wardens abroad in the sky'), count,
-        h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: 'auto', minHeight: '32px' }, onclick: () => tell() }, 'Hear the prologue')),
+        h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: 'auto', minHeight: '36px' }, onclick: () => tell() }, 'Hear the prologue')),
       h('div', { class: 'marquee' }, ticker)));
 
   const scene = mountScene(canvas, (c) => K.gate(c, {}));

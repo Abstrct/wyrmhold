@@ -317,6 +317,8 @@ async function search(query: string, pages: number): Promise<TxResponse[]> {
 }
 
 const reading = new Map<string, Promise<boolean>>();
+/** Searches in a row the node refused, per warden: each waits twice as long as the last (up to 5 min). */
+const misses = new Map<string, number>();
 /** Read back what was done to a warden since the last search (on a first search, the newest few hundred).
  * True once the ledger has answered. */
 export function backfill(pid: string): Promise<boolean> {
@@ -345,11 +347,15 @@ export function backfill(pid: string): Promise<boolean> {
     record(found, false);
     // the indexer may trail the newest bell by a little: read the last few again next time (repeats are known)
     if (top > 0) { b.height = Math.max(b.height, top - 5); save(pid); }
+    misses.delete(pid);
     return true;
   })().catch((e) => {
     console.warn('[raidlog] reading back failed', pid, e);
-    // ask again in a while (the next change in the empire starts it)
-    setTimeout(() => { if (visits.get(pid) === p) visits.delete(pid); }, 20_000);
+    // ask again in a while (the next change in the empire starts it), waiting longer each time a node
+    // keeps refusing (one with no search at all must not be asked every few seconds for the whole visit)
+    const n = (misses.get(pid) || 0) + 1;
+    misses.set(pid, n);
+    setTimeout(() => { if (visits.get(pid) === p) visits.delete(pid); }, Math.min(300_000, 20_000 * 2 ** (n - 1)));
     return false;
   }).finally(() => reading.delete(pid));
   reading.set(pid, p);

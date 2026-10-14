@@ -143,7 +143,14 @@ export class Page {
     // the new document is complete when it says so; an evaluate that lands mid-navigation is retried
     const t0 = Date.now();
     while (Date.now() - t0 < timeout) {
-      try { const r = await this.send('Runtime.evaluate', { expression: 'document.readyState + "|" + location.href', returnByValue: true }); const [state, href] = String(r.result.value).split('|'); if (state === 'complete' && (href === url || href.startsWith(url.split('#')[0]))) return; } catch { /* navigating */ }
+      // The game rewrites old '#/x' addresses into paths ('/?again=1#/hold' becomes '/hold/?again=1'), so the
+      // address alone may never match: the document's own navigation entry still names what was asked for.
+      try {
+        const r = await this.send('Runtime.evaluate', { expression: 'document.readyState + "|" + location.href + "|" + (performance.getEntriesByType("navigation")[0]?.name || "")', returnByValue: true });
+        const [state, href, asked] = String(r.result.value).split('|');
+        const base = url.split('#')[0];
+        if (state === 'complete' && (href === url || href.startsWith(base) || asked === url || asked.startsWith(base))) return;
+      } catch { /* navigating */ }
       await sleep(60);
     }
     throw new Error(`navigate ${url}: not complete after ${timeout}ms`);
