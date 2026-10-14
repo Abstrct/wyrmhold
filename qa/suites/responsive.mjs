@@ -164,7 +164,9 @@ export default async function (t, ctx) {
       await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(1500);
       for (const [id, name] of flyers) {
         await page.eval(`document.querySelector('.roster-panel .item[data-key=${JSON.stringify(id)}]').click(); window.scrollTo(0, 0); document.querySelector('.hud').scrollTop = 0;`);
-        await sleep(5000);
+        // the eye eases in over a second or two of frames (far longer under software rendering): wait for it to arrive
+        await sleep(1500);
+        await page.waitFor(`(() => { const k = document.querySelector('#app .stage canvas').__wyrmCtl.census(); return k.selected === ${JSON.stringify(id)} && k.settled; })()`, { what: `the camera to settle on the ${name}`, timeout: 120000 });
         const a = await onScreen(id);
         await sleep(3000);
         const b = await onScreen(id);
@@ -183,7 +185,7 @@ export default async function (t, ctx) {
     // sideways: the panels' column, on a panel and on the gap between two of them
     await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: PHONE_SIDE });
     await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(1500);
-    for (const [where, probe] of [['a panel', `(() => { const r = document.querySelector('.roster-panel h2').getBoundingClientRect(); return { x: r.left + 20, y: r.top + 10 }; })()`], ['the gap under the rites', `(() => { const r = document.querySelector('nav.rites').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 4 }; })()`]]) {
+    for (const [where, probe] of [['a panel', `(() => { const r = document.querySelector('.roster-panel h2').getBoundingClientRect(); return { x: r.left + 20, y: r.top + 10 }; })()`], ['the gutter beside the panels', `({ x: innerWidth - 4, y: 250 })`]]) {
       await page.eval(`document.querySelector('.hud').scrollTop = 0`); await sleep(300);
       const p = await page.eval(probe), top0 = await page.eval(`document.querySelector('.hud').scrollTop`);
       await swipe(p.x, Math.min(p.y, 360), 160);

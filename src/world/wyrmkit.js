@@ -192,6 +192,11 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       },
       /** Stand further back by k (≥ 1) when the open sky between the panels is narrow. */
       fit: function (k) { if (isFinite(k) && k > 0) fitGoal = clamp(k, 0.5, 2); },
+      /** Carry the eye along with something that moves (where it is and where it is going alike), so a slow frame
+       * rate never leaves it behind. */
+      shift: function (d) { if (d && isFinite(d.x) && isFinite(d.y) && isFinite(d.z)) { cur.target.add(d); goal.target.add(d); } },
+      /** The eye has arrived where it was sent. */
+      settled: function () { return cur.target.distanceTo(goal.target) < 0.3 && Math.abs(cur.dist - goal.dist) < 0.3 && Math.abs(fitK - fitGoal) < 0.01; },
       strayed: function () { return strayed; },
       dispose: function () { canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', up); canvas.removeEventListener('wheel', wheel); }
     };
@@ -586,8 +591,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     // where the body is now, altitude and all (a flyer is wherever its circle has carried it this frame)
     function centerOf(info) { var v = worldPos(info); v.y += (info.mid || 0) * info.holder.scale.y; return v; }
     var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // the camera keeps a roaming flyer (or a swimmer) in the middle of the view while it is the chosen one
-    var follow = null;
+    // the camera keeps a roaming flyer (or a swimmer) in the middle of the view while it is the chosen one: it is
+    // carried along with it frame by frame, and eases in only for the first approach
+    var follow = null, followAt = null;
     var _tv = new T.Vector3();
     // projected last each frame (registered just before ctl), after the camera and units have moved
     function projectTags() {
@@ -664,7 +670,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         selRing.position.set(p.x, p.y + 0.15, p.z); selRing.rotation.z = t * 0.5;
         selBeam.position.set(p.x, p.y + 15, p.z);
       }
-      if (follow && units[follow]) orbit.to(centerOf(units[follow]), null, null, null, true);
+      if (follow && units[follow]) { var fc = centerOf(units[follow]); if (followAt) orbit.shift(fc.clone().sub(followAt)); followAt = fc; }
+      else followAt = null;
     });
 
     st.add(projectTags);
@@ -677,7 +684,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         selected = id && units[id] ? id : null;
         selRing.visible = selBeam.visible = !!selected;
         if (arguments[1]) return;
-        follow = null;
+        follow = null; followAt = null;
         if (!selected) return;
         var u = units[selected], near = clamp(u.rad * 8, 16, 34);
         // a flyer on its circle (or a swimmer in the lake) is followed; under reduced motion the eye holds still
@@ -709,7 +716,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       has: function (id) { return !!units[id]; },
       /** For the proving ground: where a unit stands, and what the scene holds. */
       where: function (id) { return units[id] ? worldPos(units[id]).toArray() : null; },
-      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected, follow: follow, strayed: orbit.strayed(), ward: dome.mat.uniforms.power.value }; },
+      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected, follow: follow, strayed: orbit.strayed(), settled: orbit.settled(), ward: dome.mat.uniforms.power.value }; },
       add: function (u, quiet) {
         var info = placeUnit(u);
         if (quiet) return u.id;
