@@ -10,6 +10,7 @@ import { HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, fmtMana, hom
 import { mark } from '../core/nav';
 import { pageTitle } from '../pages';
 import { owned } from '../realm';
+import { chantTime } from '../ui/chants';
 
 export function bestiary(ctx: Ctx): Screen {
   let type = typeFromSlug(ctx.param) || 1;
@@ -50,7 +51,7 @@ export function bestiary(ctx: Ctx): Screen {
     const bars: [string, string, number, string][] = [
       ['Vigor', `${t.maxHealth} hearts`, t.maxHealth / 10, '#f08a8a'],
       ['Mana draw', fmtMana(t.passiveDraw), Math.log10(Math.max(10, t.passiveDraw / 1000)) / 5, '#8fd8ff'],
-      ['Summoning chant', t.buildDifficulty <= 250 ? 'quick' : t.buildDifficulty <= 460 ? 'steady' : 'long', t.buildDifficulty / 5000, '#e8c872'],
+      ['Summoning chant', chantTime(t.buildDifficulty), t.buildDifficulty / 5000, '#e8c872'],
     ];
     if (t.primaryWeaponCharge) bars.push(['Breath to strike', String(t.primaryWeaponCharge), t.primaryWeaponCharge / 5, '#5fd3b5']);
     const reach = [...new Set([...reachOf(t.primaryWeaponAmbits), ...reachOf(t.secondaryWeaponAmbits)])];
