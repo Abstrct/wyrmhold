@@ -3,8 +3,9 @@
  *   pnpm build && node serve.mjs            # http://localhost:8080
  *
  * Env: PORT (8080), HOST (0.0.0.0), STATIC_DIR (./dist). The page talks to the chain and to each
- * guild's servers itself. Screens live in the hash (#/hold), so any other extension-less path is the
- * app shell. */
+ * guild's servers itself. Screens live in the path, each built as its own page (/hold/ is
+ * hold/index.html, /bestiary/stone-troll is bestiary/stone-troll.html); a deeper path the build has no
+ * page for gets its nearest section's page, and an address the sky does not know gets 404.html. */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { brotliCompressSync, gzipSync, constants as Z } from 'node:zlib';
@@ -63,8 +64,9 @@ async function load(abs, ext) {
   return e;
 }
 
-/** A URL path to a file inside ROOT, or null (outside it, malformed, or not a file).
- * An extension-less path is its own .html page if there is one, else the app shell; a path with an
+/** A URL path to a file inside ROOT and the status to send it with, or null (outside it, malformed,
+ * or missing). An extension-less path is its own page if the build made one, else the nearest
+ * section page above it (200), else 404.html (404) so the game still boots; a path with an
  * extension is only ever that file. */
 async function resolveFile(pathname) {
   let p;
@@ -73,30 +75,37 @@ async function resolveFile(pathname) {
   if (p.endsWith('/')) p += 'index.html';
   const inside = (rel) => { const abs = resolve(join(ROOT, rel)); return abs === ROOT || abs.startsWith(ROOT + sep) ? abs : null; };
   const isFile = async (abs) => { try { return abs && (await stat(abs)).isFile() ? abs : null; } catch { return null; } };
+  const page = async (q) => (await isFile(inside(q + '.html'))) || isFile(inside(q + '/index.html'));
   const direct = await isFile(inside(p));
-  if (direct) return direct;
+  if (direct) return { abs: direct, status: 200 };
   if (extname(p)) return null;
-  return (await isFile(inside(p + '.html'))) || (await isFile(inside(p + '/index.html'))) || isFile(inside('/index.html'));
+  const own = await page(p.replace(/\/index\.html$/, ''));
+  if (own) return { abs: own, status: 200 };
+  const parts = p.replace(/\/index\.html$/, '').split('/').filter(Boolean);
+  for (let n = parts.length - 1; n > 0; n--) { const near = await page('/' + parts.slice(0, n).join('/')); if (near) return { abs: near, status: 200 }; }
+  const lost = (await isFile(inside('/404.html'))) || (await isFile(inside('/index.html')));
+  return lost ? { abs: lost, status: 404 } : null;
 }
 
 async function serveStatic(req, res) {
   if (req.method === 'OPTIONS') { res.writeHead(204, { ...BASE_HEADERS, 'access-control-max-age': '86400' }); res.end(); return; }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { ...BASE_HEADERS, allow: 'GET, HEAD, OPTIONS' }); res.end(); return; }
   const url = new URL(req.url || '/', 'http://x');
-  const abs = await resolveFile(url.pathname);
-  if (!abs) { res.writeHead(404, { ...BASE_HEADERS, 'content-type': 'text/plain; charset=utf-8' }); res.end('Not found'); return; }
+  const found = await resolveFile(url.pathname);
+  if (!found) { res.writeHead(404, { ...BASE_HEADERS, 'content-type': 'text/plain; charset=utf-8' }); res.end('Not found'); return; }
+  const { abs, status } = found;
   const ext = extname(abs).toLowerCase();
   const e = await load(abs, ext);
   const rel = abs.slice(ROOT.length + 1).split(sep).join('/');
   const headers = { ...BASE_HEADERS, 'content-type': TYPES[ext] || 'application/octet-stream', 'cache-control': cacheControl(rel), etag: e.etag, 'last-modified': e.mtime };
   if (e.br) headers.vary = 'accept-encoding';
-  if (req.headers['if-none-match'] === e.etag) { res.writeHead(304, headers); res.end(); return; }
+  if (status === 200 && req.headers['if-none-match'] === e.etag) { res.writeHead(304, headers); res.end(); return; }
   const accept = String(req.headers['accept-encoding'] || '');
   let body = e.raw;
   if (e.br && /\bbr\b/.test(accept)) { body = e.br; headers['content-encoding'] = 'br'; }
   else if (e.gz && /\bgzip\b/.test(accept)) { body = e.gz; headers['content-encoding'] = 'gzip'; }
   headers['content-length'] = String(body.length);
-  res.writeHead(200, headers);
+  res.writeHead(status, headers);
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 

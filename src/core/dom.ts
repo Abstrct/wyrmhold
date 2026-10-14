@@ -1,6 +1,7 @@
 /* The few DOM helpers the ledger modules (borrowed from the ledger client) ask for,
  * dressed for Wyrmhodl: a herald's scroll for toasts and a sealed-oath dialog for confirms. */
 import { speak } from '../lore';
+import { url } from './nav';
 
 type Kind = '' | 'player' | 'enemy' | 'warn';
 type Props = Record<string, unknown>;
@@ -14,6 +15,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props |
     // custom properties (--dx) only take through setProperty; Object.assign drops them silently
     else if (k === 'style' && typeof v === 'object') for (const [sk, sv] of Object.entries(v as Record<string, string>)) { if (sk.startsWith('--')) el.style.setProperty(sk, String(sv)); else (el.style as unknown as Record<string, string>)[sk] = sv; }
     else if (k === 'class') el.className = String(v);
+    // a route ('/hold') becomes the site's address for it (core/nav.ts); '//host' and full URLs pass
+    else if (k === 'href' && typeof v === 'string' && /^\/(?!\/)/.test(v)) el.setAttribute('href', url(v));
     else if (k in el && k !== 'list' && k !== 'form') (el as unknown as Record<string, unknown>)[k] = v;
     else el.setAttribute(k, v === true ? '' : String(v));
   }

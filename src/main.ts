@@ -1,6 +1,6 @@
 /* Wyrmhodl boots: the ledger's pulse (live), the soulstone (wallet), the empire it commands,
  * the chant engine (pow) and the rite queue (txq) — and
- * then the realm's screens, routed by hash. */
+ * then the realm's screens, routed by path (core/nav.ts). */
 import './styles.css';
 import { live } from './chain/live';
 import { followGrass } from './guild/directory';
@@ -18,6 +18,8 @@ import { guardTheVeil } from './ui/veilguard';
 import { watchOmens, proclaim } from './ui/omens';
 import { takeClaim } from './core/claims';
 import { canRetry } from './game/actions';
+import { go, here, mark, onRoute, startNav } from './core/nav';
+import { pageTitle } from './pages';
 import type { Screen, Ctx } from './screens/types';
 
 const MAKERS: Record<string, () => Promise<(ctx: Ctx) => Screen>> = {
@@ -35,13 +37,16 @@ const app = document.getElementById('app')!;
 const bootStep = document.getElementById('boot-step')!;
 let current: Screen | null = null;
 let routing = 0;
-// the Gate keeps the page's own title (seo/seo.ts), the one search results show
-const HOME_TITLE = document.title || 'Wyrmhodl';
 
+/** The screen a route names. An address the sky does not know settles on the Gate; the Codex is the
+ * Grimoire's old name, and /prologue is the Gate with the tale told again. */
 function parse(): { name: string; param?: string; path: string } {
-  const raw = (location.hash || '/').replace(/^#\/?/, '');
-  const [name, param] = raw.split('/');
-  return { name: MAKERS[name] ? name : '', param: param ? decodeURIComponent(param) : undefined, path: '/' + (MAKERS[name] ? name : '') };
+  const [name = '', param] = here().slice(1).split('/');
+  if (name === 'prologue') { mark('/'); return { name: '', param: 'prologue', path: '/' }; }
+  if (name === 'codex') mark(param ? `/grimoire/${param}` : '/grimoire');
+  if (!MAKERS[name]) { if (name) mark('/'); return { name: '', path: '/' }; }
+  const known = name === 'codex' ? 'grimoire' : name;
+  return { name, param: param || undefined, path: '/' + known };
 }
 
 async function route() {
@@ -52,11 +57,12 @@ async function route() {
   current?.leave();
   app.textContent = '';
   document.body.dataset.route = r.name || 'gate';
-  const ctx: Ctx = { route: r.path, param: r.param, go: (p) => { location.hash = p; }, oath: openOath };
+  const ctx: Ctx = { route: r.path, param: r.param, go: (p) => go(p), oath: openOath };
   current = make(ctx);
   app.append(current.el);
   current.enter?.();
-  document.title = current.title ? `${current.title} · Wyrmhodl` : HOME_TITLE;
+  // a page the sky builds keeps the title it was found by in search; a warden's own hold names itself
+  document.title = pageTitle(here()) || (current.title ? `${current.title} · Wyrmhodl` : pageTitle('/')!);
 }
 
 /* The herald: rites that land or fail, told once, wherever the warden is. */
@@ -95,6 +101,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function boot() {
+  startNav();   // an old #/ link becomes its path before anything reads the route
   // the page ships a gold theme-color for link cards (Discord's embed stripe); the browser's own chrome is night
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0e1a');
   guardTheVeil();
@@ -108,7 +115,7 @@ async function boot() {
   wallet.onChange(resumeEnlist); resumeEnlist();
   void empire; void pow;
   if (wallet.state === 'locked' && txq.active.length) toast(`${txq.active.length} rite(s) wait for your soulstone`, 'warn', 6000, { label: 'Unseal', run: openOath });
-  window.addEventListener('hashchange', route);
+  onRoute(() => { void route(); });
   await route();
   mountGuide();
   const b = document.getElementById('boot');

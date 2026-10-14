@@ -3,6 +3,7 @@
  * landed), so it can never be "faked" past — and a warden who arrives already strong finds the early
  * steps already lit. "Show me" carries you to the right place and makes the right control glow. */
 import { h, clear } from '../core/dom';
+import { ROUTE_EVENT, go, here as whereNow } from '../core/nav';
 import K from '../world/wyrmkit.js';
 import { wallet } from '../wallet/wallet';
 import { empire, type PlayerState } from '../game/empire';
@@ -123,7 +124,7 @@ let openHere = false;
 let walkedAt = 0;
 const FAREWELL_MS = 20000;
 // '/hold/<someone>' is their hold, not yours: only the Skirmish and Atlas count a sub-path as theirs
-const here = (route: string) => { const at = location.hash || '/'; return route === '/' ? at === '/' || at === '#' : at === route || (route !== '/hold' && at.startsWith(route + '/')); };
+const here = (route: string) => { const at = whereNow(); return route === '/' ? at === '/' : at === route || (route !== '/hold' && at.startsWith(route + '/')); };
 
 /** Make a control glow until it is used (or for a while). Screens repaint, so the glow is
  * re-applied to whatever element carries the tag until it is touched or the moment passes. */
@@ -237,7 +238,7 @@ function paint() {
   const cramped = window.innerWidth < 1180 || window.innerHeight < 700;
   // with the path walked she keeps to a quiet pill (after her farewell), opened only when asked
   const folded = hidden() || (cur ? (!here(cur.route) || cramped) && !openHere : !openHere && Date.now() - walkedAt > FAREWELL_MS);
-  const sig = [...done].join(',') + '|' + folded + '|' + (location.hash || '/') + '|' + (cur?.id || '') + '|' + waiting.map((w) => w.id).join(',') + '|' + cramped;
+  const sig = [...done].join(',') + '|' + folded + '|' + whereNow() + '|' + (cur?.id || '') + '|' + waiting.map((w) => w.id).join(',') + '|' + cramped;
   if (sig === lastSig) return;
   lastSig = sig;
   panel.classList.toggle('min', folded);
@@ -269,7 +270,7 @@ function paint() {
     todo,
     ripening,
     cur ? h('div', { class: 'row', style: { marginTop: '10px' } },
-      h('button', { type: 'button', class: 'btn small gold', onclick: () => { if (location.hash !== cur.route && !(cur.route === '/' && (location.hash === '' || location.hash === '/'))) location.hash = cur.route; if (cur.glow) setTimeout(() => glow(cur.glow!), 450); } }, 'Show me'),
+      h('button', { type: 'button', class: 'btn small gold', onclick: () => { go(cur.route); if (cur.glow) setTimeout(() => glow(cur.glow!), 450); } }, 'Show me'),
       cur.slow ? h('span', { class: 'faint', style: { fontSize: '12px' } }, 'This one ripens slowly.') : '') : '');
   if (line !== lastSaid) { lastSaid = line; speakInto(said, line); } else said.textContent = line;
 }
@@ -302,7 +303,7 @@ export function mountGuide() {
     if (/FleetMove/.test(urls)) markPath('ride');
     if (/StructAttack/.test(urls)) markPath('strike');
   });
-  window.addEventListener('hashchange', () => { openHere = false; paintSoon(); });
+  window.addEventListener(ROUTE_EVENT, () => { openHere = false; paintSoon(); });
   window.addEventListener('resize', paintSoon);
   paint();
   void portrait;

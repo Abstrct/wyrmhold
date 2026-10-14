@@ -4,6 +4,7 @@ import { live, type ChainTxEvent } from '../chain/live';
 import { empire } from '../game/empire';
 import { wallet } from '../wallet/wallet';
 import { toast, h } from '../core/dom';
+import { go } from '../core/nav';
 import { audio } from '../core/audio';
 import { playerName } from '../realm';
 import { BEASTS } from '../lore';
@@ -65,7 +66,7 @@ function struckElsewhere(events: ChainTxEvent[]) {
     const foe = empire.players.get(d.attackerPlayerId);
     const by = foe ? `${playerName(foe)}’s warband` : 'A raider';
     const what = beastWord(shot.targetStructType);
-    toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => { location.hash = `/skirmish/${d.attackerPlayerId}`; } });
+    toast(shot.targetDestroyed ? `${by} felled your ${what}!` : `${by} strikes your ${what}${shot.evaded ? ', and misses' : ''}.`, 'enemy', 8000, { label: 'Defend', run: () => go(`/skirmish/${d.attackerPlayerId}`) });
     return;
   }
 }

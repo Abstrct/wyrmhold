@@ -4,20 +4,31 @@
  * href it is given. Old '#/hold' links (shared before the sky had paths) still land. */
 
 const BASE = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : import.meta.env.BASE_URL + '/';
-const EVENT = 'wyrm:route';
+/** The event every move fires on window (links, Back and Forward, go()). */
+export const ROUTE_EVENT = 'wyrm:route';
+const EVENT = ROUTE_EVENT;
+/** Sections whose sub-routes are built pages of their own (/bestiary/stone-troll). Any other
+ * sub-route names a warden, and rides as ?warden= on its section's page (/hold/?warden=1-1000):
+ * a static host has no page for every warden, and a link card needs one that answers. */
+const PAGED = new Set(['bestiary']);
 
 /** The route the warden is on: '/', '/hold', '/hold/1-1000'. */
 export function here(): string {
   const p = decodeURI(location.pathname);
   const rel = p.startsWith(BASE) ? p.slice(BASE.length) : p.replace(/^\/+/, '');
-  return '/' + rel.replace(/\/+$/, '').replace(/\/index(\.html)?$|\.html$/, '').replace(/^index$/, '');
+  const route = '/' + rel.replace(/\/index(\.html)?$|\.html$/, '').replace(/^index$/, '').replace(/\/+$/, '');
+  const warden = new URLSearchParams(location.search).get('warden');
+  return warden && route !== '/' && route.split('/').length === 2 ? `${route}/${warden}` : route;
 }
 
 /** The address of a route. A section ('/hold') ends in a slash, as its built page does. */
 export function url(route: string): string {
   const parts = route.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
   if (!parts.length) return BASE;
-  return BASE + parts.map(encodeURIComponent).join('/') + (parts.length === 1 ? '/' : '');
+  const [section, ...rest] = parts;
+  if (!rest.length) return BASE + encodeURIComponent(section) + '/';
+  if (PAGED.has(section)) return BASE + parts.map(encodeURIComponent).join('/');
+  return BASE + encodeURIComponent(section) + '/?warden=' + encodeURIComponent(rest.join('/'));
 }
 
 const tell = () => window.dispatchEvent(new Event(EVENT));
@@ -42,7 +53,7 @@ export function onRoute(fn: () => void) {
 /** An old '#/hold/…' address becomes its path, in place. True if it did. */
 function fromHash(): boolean {
   if (!/^#\//.test(location.hash)) return false;
-  history.replaceState(history.state, '', url(location.hash.slice(1)) + location.search);
+  history.replaceState(history.state, '', url(location.hash.slice(1)));
   return true;
 }
 
@@ -61,8 +72,9 @@ export function startNav() {
     if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
     const to = new URL(a.href, location.href);
     if (to.origin !== location.origin || !to.pathname.startsWith(BASE) || /\.\w+$/.test(to.pathname)) return;
-    if (to.pathname === location.pathname && to.hash && !to.hash.startsWith('#/')) return;   // an anchor within the page
+    if (to.pathname === location.pathname && to.search === location.search && to.hash && !to.hash.startsWith('#/')) return;   // an anchor within the page
     e.preventDefault();
-    go('/' + decodeURI(to.pathname.slice(BASE.length)));
+    const warden = to.searchParams.get('warden');
+    go('/' + decodeURI(to.pathname.slice(BASE.length)).replace(/\/+$/, '') + (warden ? '/' + warden : ''));
   });
 }

@@ -2,6 +2,7 @@
  * meters, the rites, help, the guide). Shown once per browser; any key or click outside
  * the card moves on, Escape ends it. */
 import { h } from '../core/dom';
+import { ROUTE_EVENT } from '../core/nav';
 
 const KEY = 'wyrmhold.tour.hold';
 const seen = () => { try { return localStorage.getItem(KEY) === 'seen'; } catch { return true; } };
@@ -64,7 +65,7 @@ export function holdTour() {
   function end() {
     try { localStorage.setItem(KEY, 'seen'); } catch { /* once per visit then */ }
     veil.remove(); running = false; document.body.classList.remove('touring');
-    window.removeEventListener('resize', place); document.removeEventListener('keydown', key, true); window.removeEventListener('hashchange', end);
+    window.removeEventListener('resize', place); document.removeEventListener('keydown', key, true); window.removeEventListener(ROUTE_EVENT, end);
   }
   const key = (e: KeyboardEvent) => {
     // a dialog opened over the tour keeps its own keys
@@ -75,7 +76,7 @@ export function holdTour() {
   };
   window.addEventListener('resize', place);
   document.addEventListener('keydown', key, true);
-  window.addEventListener('hashchange', end);
+  window.addEventListener(ROUTE_EVENT, end);
   go(0);
 }
 

@@ -51,6 +51,7 @@ a:hover { color: #fff1c4; }
 .lander-tag, .lander-lede { font: italic 20px/1.4 var(--serif); color: var(--ink-2); }
 .lander-note { padding: 12px 16px; border: 1px solid var(--glass-line); border-radius: 8px; color: var(--gold-hi); }
 .lander a { color: var(--gold); }
+.lander-trail { margin-bottom: 18px; font: 500 13px/1.4 var(--mono); letter-spacing: .06em; color: var(--faint); }
 .lander dt { margin-top: 12px; color: var(--ink); font-weight: 700; }
 .lander dt i { color: var(--muted); font-weight: 400; }
 .lander dd { margin: 2px 0 0; color: var(--muted); }

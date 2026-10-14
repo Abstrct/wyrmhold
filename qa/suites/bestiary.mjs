@@ -21,10 +21,13 @@ export default async function (t, ctx) {
     for (const ty of TYPES) {
       await page.eval(`[...document.querySelectorAll('[aria-label="Bestiary index"] .item')].find((b) => b.querySelector('.nm').textContent === ${JSON.stringify(ty.type)}).click()`);
       await sleep(650);
-      const r = await page.eval(`({ h1: document.querySelector('[aria-label="Beast lore"] h1').textContent, text: document.querySelector('[aria-label="Beast lore"]').innerText, hash: location.hash })`);
+      const r = await page.eval(`({ h1: document.querySelector('[aria-label="Beast lore"] h1').textContent, text: document.querySelector('[aria-label="Beast lore"]').innerText, path: location.pathname, title: document.title })`);
       if (r.h1 !== ty.type) wrong.push(`${ty.id}: ${r.h1}`);
       if (!r.text.includes(`${ty.maxHealth} hearts`)) wrong.push(`${ty.type}: hearts ${ty.maxHealth} not shown`);
-      if (r.hash !== `#/bestiary/${ty.id}`) wrong.push(`${ty.type}: hash ${r.hash}`);
+      // the address names the beast (/bestiary/stone-troll), and so does the tab
+      const slug = ty.type.toLowerCase().replace(/^the /, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (r.path !== `/bestiary/${slug}`) wrong.push(`${ty.type}: address ${r.path}`);
+      if (!r.title.startsWith(ty.type + ' — ')) wrong.push(`${ty.type}: tab ${r.title}`);
       if (ty.category === 'fleet' && !/Strikes into/i.test(r.text)) wrong.push(`${ty.type}: no reach`);
       if (ty.category === 'planet' && /Strikes into/i.test(r.text)) wrong.push(`${ty.type}: a hallow with reach`);
       const st = await stage(page); if (!st.finite) wrong.push(`${ty.type}: camera NaN`);

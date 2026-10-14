@@ -59,5 +59,26 @@ export default async function (t, ctx) {
     // the ledger rightly answers 404 for a warden who does not exist; only a thrown error counts
     expect.noErrors(page.errors([...ALLOW, /\[network\].*404/]), 'console');
   });
+  await t.test('every screen is a real address: old # links land on it, links move without a reload, Back returns', 'S1', async () => {
+    await openGame(page, ctx.app.url, '#/bestiary/7');
+    const at = () => page.eval(`({ path: location.pathname, search: location.search, hash: location.hash, route: document.body.dataset.route, title: document.title, kept: window.__qaKept === 1 })`);
+    let r = await at();
+    expect.eq(r.path, '/bestiary/storm-gryphon', 'an old numbered # link settles on the beast’s name');
+    expect.eq(r.hash, '', 'no # left in the address');
+    expect.ok(r.title.startsWith('Storm Gryphon — '), 'the tab names the beast', r.title);
+    await page.eval(`window.__qaKept = 1; document.querySelector('.topbar nav a[href="/atlas/"]').click()`);
+    await page.waitFor(`document.body.dataset.route === 'atlas'`, { what: 'the Atlas to mount', timeout: 15000 });
+    r = await at();
+    expect.eq(r.path, '/atlas/', 'a road in the top bar is a path');
+    expect.ok(r.kept, 'the page did not reload (the sky stays awake between screens)');
+    expect.ok(r.title.startsWith('Sky Atlas — '), 'the tab names the Atlas as search does', r.title);
+    await page.eval(`history.back()`);
+    await page.waitFor(`document.body.dataset.route === 'bestiary'`, { what: 'Back to bring the Bestiary again', timeout: 15000 });
+    expect.eq((await at()).path, '/bestiary/storm-gryphon', 'Back returns to the beast');
+    await go(page, '#/hold/' + ctx.sky.foe.pid);
+    r = await at();
+    expect.eq(r.path + r.search, '/hold/?warden=' + encodeURIComponent(ctx.sky.foe.pid), 'a warden’s hold rides on the Hold’s own page');
+    expect.ok(r.kept, 'still no reload');
+  });
   await page.close();
 }

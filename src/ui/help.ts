@@ -1,6 +1,7 @@
 /* How to play, on one page: the loop a warden lives by, where each part happens, and the few
  * words worth knowing. Opened from the "?" in the top bar, wherever the warden is. */
 import { h } from '../core/dom';
+import { ROUTE_EVENT, go as goTo, here } from '../core/nav';
 import { icon, ICON, GLOSS } from './frame';
 import { resetPath } from './guide';
 import { resetTour, holdTour } from './tour';
@@ -16,9 +17,9 @@ const LOOP: [string, string, string, string][] = [
 
 export function openHelp() {
   if (open) return;
-  const close = () => { veil.remove(); open = null; document.removeEventListener('keydown', esc); window.removeEventListener('hashchange', close); };
+  const close = () => { veil.remove(); open = null; document.removeEventListener('keydown', esc); window.removeEventListener(ROUTE_EVENT, close); };
   const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-  const go = (href: string) => () => { close(); location.hash = href; };
+  const go = (href: string) => () => { close(); goTo(href); };
   const veil = h('div', { class: 'veil', onclick: (e: Event) => { if (e.target === veil) close(); } },
     h('section', { class: 'scroll wide help', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title' },
       h('div', { class: 'row between', style: { alignItems: 'flex-start', flexWrap: 'nowrap' } },
@@ -35,13 +36,13 @@ export function openHelp() {
         h('button', { type: 'button', class: 'btn small ghost', onclick: () => {
           resetTour();
           // already home: the hash would not change, so start the look around here
-          if (location.hash === '/hold') { close(); holdTour(); } else go('/hold')();
+          if (here() === '/hold') { close(); holdTour(); } else go('/hold')();
         } }, 'Show me around the Hold again'),
         h('button', { type: 'button', class: 'btn small ghost', onclick: () => { resetPath(); close(); } }, 'Start Ysolde’s path again'),
         h('a', { class: 'btn small ghost', href: '/grimoire', onclick: close }, 'The full Grimoire'))));
   open = veil;
   document.body.append(veil);
   document.addEventListener('keydown', esc);
-  window.addEventListener('hashchange', close);
+  window.addEventListener(ROUTE_EVENT, close);
   (veil.querySelector('.help-loop .btn') as HTMLElement | null)?.focus();
 }

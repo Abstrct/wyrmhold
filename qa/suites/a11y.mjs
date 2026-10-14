@@ -95,7 +95,7 @@ export default async function (t, ctx) {
       expect.ok(r.card, 'the chosen isle card stays (no fade out and in)');
       expect.ok(r.open, '"Ledger marks" stays open');
       await page.key('Enter');
-      await page.waitFor(`location.hash === '#/skirmish/${foe.pid}'`, { what: 'Enter on Raid this hold to open the Skirmish', timeout: 5000 });
+      await page.waitFor(`(await import('/src/core/nav.ts')).here() === '/skirmish/${foe.pid}'`, { what: 'Enter on Raid this hold to open the Skirmish', timeout: 5000 });
     } finally {
       wyrm.structAttributes.health = hp;
       ctx.ledger.emitTx([{ type: 'EventStruct', key: 'structure', data: { id: wyrm.Struct.id, owner: foe.pid, locationId: foe.fleetId } }]);
