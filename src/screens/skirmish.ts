@@ -40,7 +40,7 @@ export function skirmish(ctx: Ctx): Screen {
   const sBtnLabel = h('span', { class: 'ub-l' }, 'Unleash');
   const sBtnSub = h('span', { class: 'ub-s' });
   const sBtnFill = h('span', { class: 'ub-fill', 'aria-hidden': 'true' });
-  const sBtn = h('button', { type: 'button', class: 'btn ember unleash', 'data-tut': 'unleash', onclick: () => press() }, sBtnFill, sBtnLabel, sBtnSub);
+  const sBtn = h('button', { type: 'button', class: 'btn ember unleash', 'data-tut': 'unleash', onclick: (e: Event) => { pressAt = e.timeStamp || performance.now(); press(); } }, sBtnFill, sBtnLabel, sBtnSub);
   const sPending = h('div', { class: 'fc-pending', role: 'status', 'aria-live': 'polite' });
   const sNote = h('div');
   const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Camera view' });
@@ -282,18 +282,22 @@ export function skirmish(ctx: Ctx): Screen {
   }
   let strikeNote = '', lastAM = '';
   /** A deadly blow (or ride) pressed once: it waits for a second, deliberate press. */
-  let armed: { key: string; at: number } | null = null, armTimer = 0;
+  let armed: { key: string; at: number } | null = null, armTimer = 0, pressAt = 0;
   /** A second press this soon after the first is the same tap twice (a double-tap, a held key), not a choice. */
   const ARM_GAP = 600;
   /** True when this press confirms the deadly `key`; otherwise it arms it (or is ignored as too quick) and
    * the button asks again. The question stays while the pointer or the focus is on the button, and goes
    * a few seconds after both have left. */
   function confirmed(key: string): boolean {
+    // when the press happened, not when it was heard: a busy page can hear a double-tap's two taps far apart
+    const at = pressAt || performance.now();
     if (armed?.key === key) {
-      if (Date.now() - armed.at >= ARM_GAP) return true;
-      return false;   // the double-tap's second tap: ignored, the question stands
+      const quick = at - armed.at < ARM_GAP;
+      // a double-tap's second tap, or a held key's repeats: ignored, and each one restarts the wait
+      armed.at = at;
+      return !quick;
     }
-    armed = { key, at: Date.now() };
+    armed = { key, at };
     clearTimeout(armTimer);
     const check = () => {
       if (!armed || armed.key !== key || left) return;
