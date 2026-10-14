@@ -4,7 +4,7 @@
  * post) lives in look.js, the land in land.js, the great beasts in beasts.js; this file holds
  * the bestiary index and the scenes. Every scene returns a small controller the page drives. */
 import * as T from 'three';
-import { TAU, rng, hashStr, makeNoise, clamp, lerp, smooth, M, G, mesh, glowSprite, softDot, runeDisc, runeTexture, Stage, mood, sky, cloudSea, cloudscape, cloudBank, lights, motes, U, MOODS, seaShadow, shootingStars, nameplate, holdTextureHooks } from './look.js';
+import { TAU, rng, hashStr, makeNoise, clamp, lerp, smooth, M, G, mesh, glowSprite, softDot, runeDisc, runeTexture, Stage, mood, sky, cloudSea, cloudscape, cloudBank, lights, motes, U, MOODS, seaShadow, shootingStars, nameplate, holdTextureHooks, lightTier } from './look.js';
 import { isle, dressIsle, crystal, keep, waterfall, floraGeo, CANOPIES, prep, rgb, mixc, at, taperTube, hamlet, lanterns, flock as birdFlock } from './land.js';
 import { wyrm, SpineBody, onFrame, keys, BESTIARY } from './beasts.js';
 import { hallow } from './hallows.js';
@@ -110,6 +110,10 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var cur = { az: o.az || 0.7, el: o.el || 0.35, dist: o.dist || 50, target: (o.target || new T.Vector3()).clone() };
     var goal = { az: cur.az, el: cur.el, dist: cur.dist, target: cur.target.clone() };
     var drag = false, px = 0, py = 0, moved = 0, idle = 0, life = 0;
+    // where the view began (the way back to the whole scene), whether it has strayed from there since, and how
+    // much further back the screen asks the eye to stand when its panels leave only a narrow gap of sky
+    var home0 = { az: goal.az, el: goal.el, dist: goal.dist, target: goal.target.clone() }, strayed = false, fitK = 1, fitGoal = 1;
+    function stray(v) { if (v === strayed) return; strayed = v; if (o.onMoved) o.onMoved(v); }
     // each scene opens a little further out, higher and turned, and settles in slowly
     var intro = o.intro !== false && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     if (intro) { cur.dist *= 1.7; cur.el = Math.min(1.2, cur.el + 0.28); cur.az -= 0.45; }
@@ -125,12 +129,13 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     function move(e) {
       var p = pts.get(e.pointerId); if (!p) return;
       p.x = e.clientX; p.y = e.clientY;
-      if (pinch && pts.size >= 2) { goal.dist = clamp(pinch.dist * pinch.span / span(), o.min || 10, o.max || 200); idle = 0; return; }
+      if (pinch && pts.size >= 2) { goal.dist = clamp(pinch.dist * pinch.span / span(), o.min || 10, o.max || 200); idle = 0; stray(true); return; }
       if (!drag) return;
       var dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
       moved += Math.abs(dx) + Math.abs(dy);
       goal.az -= dx * 0.006; goal.el = clamp(goal.el + dy * 0.004, o.minEl == null ? 0.02 : o.minEl, o.maxEl || 1.35);
       idle = 0;
+      if (moved > 6) stray(true);
     }
     function up(e) {
       if (!pts.has(e.pointerId)) return;
@@ -145,7 +150,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         o.onTap(new T.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1));
       }
     }
-    function wheel(e) { e.preventDefault(); goal.dist = clamp(goal.dist * (1 + e.deltaY * 0.0012), o.min || 10, o.max || 200); idle = 0; }
+    function wheel(e) { e.preventDefault(); goal.dist = clamp(goal.dist * (1 + e.deltaY * 0.0012), o.min || 10, o.max || 200); idle = 0; stray(true); }
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
     canvas.addEventListener('pointerup', up);
@@ -158,14 +163,25 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       var k = 1 - Math.exp(-dt * (o.ease || 3) * (intro && !drag ? 0.22 + 0.78 * smooth(0, 4, life) : 1));
       cur.az = lerp(cur.az, goal.az, k); cur.el = lerp(cur.el, goal.el, k); cur.dist = lerp(cur.dist, goal.dist, k);
       cur.target.lerp(goal.target, k);
-      var ce = Math.cos(cur.el);
-      cam.position.set(cur.target.x + Math.sin(cur.az) * ce * cur.dist, cur.target.y + Math.sin(cur.el) * cur.dist, cur.target.z + Math.cos(cur.az) * ce * cur.dist);
+      fitK = lerp(fitK, fitGoal, k);
+      var ce = Math.cos(cur.el), d = cur.dist * fitK;
+      cam.position.set(cur.target.x + Math.sin(cur.az) * ce * d, cur.target.y + Math.sin(cur.el) * d, cur.target.z + Math.cos(cur.az) * ce * d);
       cam.lookAt(cur.target);
     });
     return {
       goal: goal,
       // a target that is not a number would carry the camera off into nothing for good: refuse it
-      to: function (target, dist, el, az) { if (target && isFinite(target.x) && isFinite(target.y) && isFinite(target.z)) goal.target.copy(target); else if (target) console.error('[wyrmhold] the camera was asked to look at nowhere', target); if (dist && isFinite(dist)) goal.dist = dist; if (el != null && isFinite(el)) goal.el = el; if (az != null && isFinite(az)) goal.az = az; idle = 0; },
+      // (`quiet` moves are the scene's own, such as following a flyer: they do not count as the view straying)
+      to: function (target, dist, el, az, quiet) { if (target && isFinite(target.x) && isFinite(target.y) && isFinite(target.z)) goal.target.copy(target); else if (target) console.error('[wyrmhold] the camera was asked to look at nowhere', target); if (dist && isFinite(dist)) goal.dist = dist; if (el != null && isFinite(el)) goal.el = el; if (az != null && isFinite(az)) goal.az = az; idle = 0; if (!quiet) stray(true); },
+      /** Back to the view the scene opened on: the whole isle (a turning sky keeps its turn). */
+      home: function () {
+        goal.target.copy(home0.target); goal.dist = home0.dist; goal.el = home0.el;
+        if (!o.auto) goal.az = home0.az + Math.round((goal.az - home0.az) / TAU) * TAU;
+        idle = 0; stray(false);
+      },
+      /** Stand further back by k (≥ 1) when the open sky between the panels is narrow. */
+      fit: function (k) { if (isFinite(k) && k > 0) fitGoal = clamp(k, 0.5, 2); },
+      strayed: function () { return strayed; },
       dispose: function () { canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', up); canvas.removeEventListener('wheel', wheel); }
     };
   }
@@ -204,6 +220,39 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     function lv() { inside = false; run(); }
     canvas.addEventListener('pointermove', mv); canvas.addEventListener('pointerleave', lv);
     return function () { canvas.removeEventListener('pointermove', mv); canvas.removeEventListener('pointerleave', lv); canvas.style.cursor = ''; };
+  }
+
+  /* The open sky between a screen's panels is rarely the middle of the canvas: the lens shifts the picture by
+   * (dx, dy) pixels so what the camera looks at sits in that gap (a view offset, so picking and tags agree).
+   * It eases there, except under reduced motion. */
+  function Lens(st) {
+    var cam = st.camera, cur = { x: 0, y: 0 }, goal = { x: 0, y: 0 }, lw = 0, lh = 0;
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    st.add(function (t, dt) {
+      var w = st.canvas.clientWidth || 1, h = st.canvas.clientHeight || 1;
+      if (cur.x === goal.x && cur.y === goal.y && w === lw && h === lh) return;
+      var k = still ? 1 : 1 - Math.exp(-dt * 7);
+      cur.x += (goal.x - cur.x) * k; cur.y += (goal.y - cur.y) * k;
+      if (Math.abs(goal.x - cur.x) < 0.5 && Math.abs(goal.y - cur.y) < 0.5) { cur.x = goal.x; cur.y = goal.y; }
+      lw = w; lh = h; cam.filmOffset = 0;
+      if (cur.x === 0 && cur.y === 0) cam.clearViewOffset(); else cam.setViewOffset(w, h, -cur.x, -cur.y, w, h);
+    });
+    return { set: function (dx, dy) { goal.x = isFinite(dx) ? Math.round(dx) : 0; goal.y = isFinite(dy) ? Math.round(dy) : 0; } };
+  }
+  K.Lens = Lens;
+
+  /* A small thing that flies is hard to touch: when a tap misses every body, take the nearest flyer whose
+   * middle is within a finger's reach of it on screen. */
+  function nearPick(st, list, ndc) {
+    var w = st.canvas.clientWidth || 1, h = st.canvas.clientHeight || 1, reach = lightTier() ? 34 : 20, best = null, bd = reach, v = new T.Vector3();
+    st.camera.updateMatrixWorld();
+    for (var i = 0; i < list.length; i++) {
+      v.copy(list[i].at).project(st.camera);
+      if (v.z > 1) continue;
+      var d = Math.hypot((v.x - ndc.x) * w / 2, (v.y - ndc.y) * h / 2);
+      if (d < bd) { bd = d; best = list[i].id; }
+    }
+    return best;
   }
 
   /* The ward: only its edge and a slow drift of hexes show, and it flares when struck. */
@@ -421,7 +470,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var tallH = cw / Math.max(1, chh) < 0.9;
     var az0 = tallH && lair ? Math.atan2(-lair.x, -lair.z) : 0.9;
     // (and holds that view: a phone does not drift the Wyrm out of its narrow window; a drag still turns it)
-    var orbit = Orbit(st, { dist: 74, el: 0.5, az: az0, target: new T.Vector3(0, 3, 0), min: 18, max: 140, auto: tallH ? 0 : 0.025, onTap: function (ndc) { var id = pick(ndc); if (o.onPick) o.onPick(id); } });
+    var orbit = Orbit(st, { dist: 74, el: 0.5, az: az0, target: new T.Vector3(0, 3, 0), min: 18, max: 140, auto: tallH ? 0 : 0.025, onMoved: o.onView, onTap: function (ndc) { var id = pick(ndc); if (o.onPick) o.onPick(id); } });
+    var lens = Lens(st);
 
     var units = {}, roots = [];
     var counters = { skies: 0, starfall: 0, wilds: 0, deeps: 0, hallow: 0 };
@@ -502,10 +552,13 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       info.key = unitKey(u);
       st.scene.add(holder);
       units[u.id] = info; roots.push(holder);
+      // its middle and its size: the camera looks at the body, not the feet, and stands back as far as it is big
+      holder.updateMatrixWorld(true);
+      var bb = new T.Box3().setFromObject(holder), bs = bb.getBoundingSphere(new T.Sphere());
+      info.mid = isFinite(bs.center.y) ? bs.center.y - holder.position.y : 0.6;
+      info.rad = isFinite(bs.radius) && bs.radius > 0 ? Math.min(bs.radius, 8) : 1.5;
       // a small name floats over each thing on the isle, so it says what it is without a hover
       if (u.label && tagBox) {
-        holder.updateMatrixWorld(true);
-        var bb = new T.Box3().setFromObject(holder);
         info.tagY = Math.max(1.2, bb.max.y - holder.position.y) + 0.5;
         info.tag = document.createElement('span'); info.tag.className = 'unit-tag'; info.tag.textContent = u.label;
         // hidden until its first frame places it, or it shows for a moment in the corner of the screen
@@ -519,6 +572,11 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     (o.units || []).forEach(placeUnit);
 
     function worldPos(info) { var v = new T.Vector3(); info.holder.getWorldPosition(v); return v; }
+    // where the body is now, altitude and all (a flyer is wherever its circle has carried it this frame)
+    function centerOf(info) { var v = worldPos(info); v.y += (info.mid || 0) * info.holder.scale.y; return v; }
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // the camera keeps a roaming flyer (or a swimmer) in the middle of the view while it is the chosen one
+    var follow = null;
     var _tv = new T.Vector3();
     // projected last each frame (registered just before ctl), after the camera and units have moved
     function projectTags() {
@@ -552,7 +610,15 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         it.info.tag.style.transform = 'translate(' + it.x.toFixed(1) + 'px,' + it.y.toFixed(1) + 'px) translate(-50%,-100%)';
       }
     }
-    var pick = picker(st, function () { return roots; });
+    var pickBody = picker(st, function () { return roots; });
+    // a tap that misses every body still takes a flyer it nearly touched: small, fast things are hard to hit
+    var pick = function (ndc) {
+      var id = pickBody(ndc);
+      if (id != null) return id;
+      var near = [];
+      for (var k in units) if (units[k].orbit || units[k].swim) near.push({ id: k, at: centerOf(units[k]) });
+      return nearPick(st, near, ndc);
+    };
     var hoverRing = runeDisc(2.0, '#f6e7bf', 0.55, 1.6); hoverRing.visible = false; st.scene.add(hoverRing);
     var hovered = null;
     var unhover = hoverable(st, pick, function (id) { hovered = id; if (o.onHover) o.onHover(id); });
@@ -587,28 +653,34 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         selRing.position.set(p.x, p.y + 0.15, p.z); selRing.rotation.z = t * 0.5;
         selBeam.position.set(p.x, p.y + 15, p.z);
       }
+      if (follow && units[follow]) orbit.to(centerOf(units[follow]), null, null, null, true);
     });
 
     st.add(projectTags);
     var ctl = {
       setWard: function (v) { dome.mat.uniforms.power.value = clamp(v, 0, 1.4); },
-      // centre the view on the open space between the screen's panels: shift the lens sideways by dx pixels
-      frame: function (dx) {
-        // measure from the canvas itself: on a resize the camera's aspect may not have caught up yet
-        var cam = st.camera, w = st.canvas.clientWidth || 1, asp = w / Math.max(1, st.canvas.clientHeight);
-        var off = -(dx / w) * 2 * Math.tan(T.MathUtils.degToRad(cam.fov / 2)) * asp * (cam.filmGauge * Math.min(asp, 1));
-        if (Math.abs(off - cam.filmOffset) < 1e-4) return;
-        cam.filmOffset = off; cam.updateProjectionMatrix();
-      },
+      // centre the view on the open space between the screen's panels: shift the lens by (dx, dy) pixels, and
+      // stand back by `fit` when that space is narrow
+      frame: function (dx, dy, fit) { lens.set(dx, dy || 0); orbit.fit(fit || 1); },
       select: function (id) {
         selected = id && units[id] ? id : null;
         selRing.visible = selBeam.visible = !!selected;
-        if (selected && !arguments[1]) { var p = worldPos(units[selected]); orbit.to(p, 30); }
+        if (arguments[1]) return;
+        follow = null;
+        if (!selected) return;
+        var u = units[selected], near = clamp(u.rad * 8, 16, 34);
+        // a flyer on its circle is followed; under reduced motion the eye holds still and takes in its whole circle
+        if (u.orbit && still) orbit.to(new T.Vector3(0, u.orbit.y, 0), Math.max(near, u.orbit.r * 2.6));
+        else { orbit.to(centerOf(u), near); if (u.orbit || u.swim) follow = selected; }
       },
       focus: function (realm) {
-        var map = { all: [new T.Vector3(0, 3, 0), 74, 0.5], starfall: [new T.Vector3(0, 22, 0), 70, 0.25], skies: [new T.Vector3(0, 10, 0), 52, 0.3], wilds: [new T.Vector3(0, 1, 0), 40, 0.55], deeps: [new T.Vector3(I.lake.x, -1, I.lake.z), 22, 0.75] };
-        var m = map[realm] || map.all; orbit.to(m[0], m[1], m[2]);
+        follow = null;
+        if (!realm || realm === 'all') { orbit.home(); return; }
+        var map = { starfall: [new T.Vector3(0, 22, 0), 70, 0.25], skies: [new T.Vector3(0, 10, 0), 52, 0.3], wilds: [new T.Vector3(0, 1, 0), 40, 0.55], deeps: [new T.Vector3(I.lake.x, -1, I.lake.z), 22, 0.75] };
+        var m = map[realm]; if (m) orbit.to(m[0], m[1], m[2]); else orbit.home();
       },
+      /** The whole isle again, as it opened (and no longer following anything). */
+      home: function () { follow = null; orbit.home(); },
       sync: function (list, quiet) {
         var want = {};
         list.forEach(function (u) { want[u.id] = u; });
@@ -624,7 +696,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       has: function (id) { return !!units[id]; },
       /** For the proving ground: where a unit stands, and what the scene holds. */
       where: function (id) { return units[id] ? worldPos(units[id]).toArray() : null; },
-      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected, ward: dome.mat.uniforms.power.value }; },
+      census: function () { return { units: Object.keys(units), roots: roots.length, tags: tagBox ? tagBox.childElementCount : 0, selected: selected, follow: follow, strayed: orbit.strayed(), ward: dome.mat.uniforms.power.value }; },
       add: function (u, quiet) {
         var info = placeUnit(u);
         if (quiet) return u.id;
@@ -703,7 +775,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     // start between two pillars (they stand at 0.22 + k·2π/7) and a little above them, so none hides the creature
     // a tall phone screen sees less across: stand further back so the whole beast fits
     var tallC = canvas.clientWidth / Math.max(1, canvas.clientHeight) < 0.9;
-    var orbit = Orbit(st, { dist: tallC ? 40 : 31, el: 0.27, az: 0.9, target: new T.Vector3(0, 3.6, 0), min: 10, max: 70, auto: 0.1 });
+    var orbit = Orbit(st, { dist: tallC ? 40 : 31, el: 0.27, az: 0.9, target: new T.Vector3(0, 3.6, 0), min: 10, max: 70, auto: 0.1, onMoved: o.onView });
+    var lens = Lens(st);
     var cur = null, holder = new T.Group(); st.scene.add(holder);
     st.studio = holder;
     var pillar = new T.Mesh(new T.CylinderGeometry(2.4, 2.4, 40, 32, 1, true), new T.ShaderMaterial({
@@ -743,6 +816,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     });
     return {
       show: show,
+      /** Centre the dais in the open sky between the panels, standing back by `fit` when that sky is narrow. */
+      frame: function (dx, dy, fit) { lens.set(dx, dy || 0); orbit.fit(fit || 1); },
+      home: function () { orbit.home(); },
       summon: function (type) {
         flash = 1.0; waveK = 0;
         burst(new T.Vector3(0, 0.6, 0), { color: 0xe8c872, count: 180, speed: 9, up: true, grav: -2, swirl: 3, ring: 3, i: 1.6, size: 0.45 });
@@ -876,7 +952,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var beam = new T.Mesh(new T.CylinderGeometry(0.45, 0.45, 120, 24, 1, true), G(0xe8c872, { t: true, o: 0.12, add: true, ds: true, i: 2 })); beam.visible = false; st.scene.add(beam);
     var pick = picker(st, function () { return meshes; });
     var unhover = hoverable(st, pick, function (i) { if (o.onHover) o.onHover(i); });
-    var orbit = Orbit(st, { dist: 230, el: 0.48, az: 0.3, target: new T.Vector3(0, 0, 0), min: 20, max: 700, auto: 0.02, onTap: function (ndc) { var i = pick(ndc); if (i != null && o.onPick) o.onPick(i); } });
+    var orbit = Orbit(st, { dist: 230, el: 0.48, az: 0.3, target: new T.Vector3(0, 0, 0), min: 20, max: 700, auto: 0.02, onMoved: o.onView, onTap: function (ndc) { var i = pick(ndc); if (i != null && o.onPick) o.onPick(i); } });
+    var lens = Lens(st);
     var selected = -1, ride = null;
     st.add(function (t) {
       place(t);
@@ -893,6 +970,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         for (var i = 0; i < isles.length; i++) { if (isles[i].w.you) continue; isles[i].ore = ores[i] || 0; }
         paintBeacons(); bgeo.attributes.color.needsUpdate = true; bgeo.attributes.sz.needsUpdate = true;
       },
+      frame: function (dx, dy, fit) { lens.set(dx, dy || 0); orbit.fit(fit || 1); },
+      home: function () { orbit.home(); },
       select: function (i) {
         selected = i == null ? -1 : i;
         sel.visible = beam.visible = selected >= 0;
@@ -1027,7 +1106,15 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         tags.add(u.id, holder, u.label, si ? 'theirs' : '');
       });
     });
-    var pick = picker(st, function () { return roots; });
+    var pickBody = picker(st, function () { return roots; });
+    // a tap that misses every body still takes a beast of the high realms it nearly touched
+    var pick = function (ndc) {
+      var id = pickBody(ndc);
+      if (id != null) return id;
+      var near = [];
+      for (var k in units) if (units[k].dying == null && (units[k].realm === 'skies' || units[k].realm === 'starfall' || units[k].aloft)) near.push({ id: k, at: units[k].holder.position });
+      return nearPick(st, near, ndc);
+    };
     var hoverRing = runeDisc(2.2, '#f6e7bf', 0.55, 1.6); hoverRing.visible = false; st.scene.add(hoverRing);
     var hovered = null;
     var unhover = hoverable(st, pick, function (id) { hovered = id; if (o.onHover) o.onHover(id); });
@@ -1042,6 +1129,7 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     // wide screens keep their sky between the war bar above and the strike below: look a little higher, so the
     // beasts of Starfall and the Skies hang in that open band instead of behind the panels
     var orbit = Orbit(st, { dist: tall() ? 118 : 84, el: tall() ? 0.34 : 0.2, az: tall() ? -1.2 : 0, target: new T.Vector3(0, tall() ? 3 : 7, 0), min: 25, max: 170, onTap: function (ndc) { var id = pick(ndc); if (o.onPick) o.onPick(id); } });
+    var lens = Lens(st);
     // a heavy blow shakes the eye a little (never under reduced motion)
     var quake = 0, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     st.add(function (t, dt) {
@@ -1166,6 +1254,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var ctl = {
       where: function (id) { return units[id] ? units[id].holder.position.toArray() : null; },
       census: function () { return { units: Object.keys(units), roots: roots.length }; },
+      /** Centre the gulf in the open sky between the panels, standing back by `fit` when that sky is narrow. */
+      frame: function (dx, dy, fit) { lens.set(dx, dy || 0); orbit.fit(fit || 1); },
       mark: function (key, id) { if (marks[key]) marks[key].id = id; },
       /** Send a side's warband over the other isle, or bring it home; it flies there. */
       abroad: function (side, on) {

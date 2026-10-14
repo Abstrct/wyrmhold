@@ -15,10 +15,13 @@ import { covenColor, covenName, retellError, bellsAsTime, beastName } from '../l
 import { markPath } from '../ui/guide';
 import { hearts } from '../ui/frame';
 import { alive, guardsOf, inRealm, reach, wyrmOf } from '../game/war';
+import { worldView, openSky, keepFramed, PHONE_UPRIGHT, PHONE_SIDEWAYS } from '../ui/world';
 
 export function atlas(ctx: Ctx): Screen {
   const canvas = h('canvas');
-  const bar = topbar('/atlas', ctx.oath, { meters: true });
+  // "look at the world": the panels tuck away; once the eye has flown to an isle, a way back to the whole sky
+  const world = worldView('atlas', { home: () => scene?.get()?.home(), homeLabel: 'Whole sky' });
+  const bar = topbar('/atlas', ctx.oath, { meters: true, world: world.el });
   const search = h('input', { id: 'warden-search', type: 'search', placeholder: 'A warden’s name', autocomplete: 'off' }) as HTMLInputElement;
   const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Covens' });
   const list = h('ul', { class: 'list scroll-y', 'data-tut': 'atlas' });
@@ -47,7 +50,21 @@ export function atlas(ctx: Ctx): Screen {
   const oreOf = (w: Warden) => sight.get(w.id)?.ore ?? 0;
   const sleptFor = (w: Warden) => { const l = sight.get(w.id)?.lastAction ?? 0; return l && live.height ? live.height - l : 0; };
   let sel = -1;
-  let scene: ReturnType<typeof mountScene<{ dispose(): void; select(i: number | null): void; ride(i: number): void; glowRich(o: number[]): void }>> | null = null;
+  let scene: ReturnType<typeof mountScene<{ dispose(): void; select(i: number | null): void; ride(i: number): void; glowRich(o: number[]): void; frame(dx: number, dy: number, fit?: number): void; home(): void }>> | null = null;
+  /** Keep the chosen isle in the open sky between the list and its card (on a phone, in the window above them). */
+  function reframe() {
+    const ctl = scene?.get();
+    if (!ctl || !canvas.isConnected) return;
+    const wardensBox = el.querySelector('[aria-label="Wardens"]');
+    const g = openSky(canvas, {
+      window: matchMedia(PHONE_UPRIGHT).matches ? el.querySelector('.isle-window') : null,
+      tops: [bar.el], bottoms: [legend],
+      sides: matchMedia(PHONE_SIDEWAYS).matches ? [wardensBox, card, legend] : [wardensBox, card],
+    });
+    if (g) ctl.frame(g.dx, g.dy);
+  }
+  const framer = keepFramed(reframe);
+  const offWorld = world.onChange(() => framer.soon());
 
   const name = (id: string) => covenName(id, meta.get(id)?.meta?.name);
 
@@ -108,7 +125,7 @@ export function atlas(ctx: Ctx): Screen {
   const marksOpen = new Set<string>();
   let facts: HTMLElement | null = null, scoutBox: HTMLElement | null = null, cardFor: string | null = null;
 
-  function paint() { keepFocus(el, paintNow); }
+  function paint() { keepFocus(el, paintNow); framer.soon(); }
   function paintNow() {
     const q = search.value.trim().toLowerCase();
     const meId = empire.commander?.playerId;
@@ -242,12 +259,12 @@ export function atlas(ctx: Ctx): Screen {
     for (const c of covens) colors[c] = parseInt(covenColor(c).slice(1), 16);
     const meId = empire.commander?.playerId;
     scene = mountScene(canvas, (c) => K.atlas(c, {
-      covens, colors, isles: all.map((w) => ({ id: w.id, coven: w.guildId, you: w.id === meId })), onPick: (i: number) => pick(i),
+      covens, colors, isles: all.map((w) => ({ id: w.id, coven: w.guildId, you: w.id === meId })), onPick: (i: number) => pick(i), onView: (m: boolean) => world.moved(m),
       onHover: (i: number | null) => {
         const w = i == null ? undefined : all[i], you = w?.id === empire.commander?.playerId;
         tip.show(w ? (you ? 'Your Hold' : wardenName(w)) : null, w && !you && oreOf(w) > 0 ? `${oreOf(w)} wildroot to plunder` : 'click to look closer');
       },
-    }), (c) => { c.glowRich(all.map((w) => oreOf(w))); if (focus) { const i = all.findIndex((w) => w.id === focus); if (i >= 0) pick(i); } });
+    }), (c) => { c.glowRich(all.map((w) => oreOf(w))); if (focus) { const i = all.findIndex((w) => w.id === focus); if (i >= 0) pick(i); } framer.soon(); });
     paint();
   }
   // the foot is written here, outside paint: forget its signature so the next paint writes it again
@@ -270,5 +287,5 @@ export function atlas(ctx: Ctx): Screen {
       scene.dispose(); scene = null; sel = -1; buildSky(was);
     } else paint();
   });
-  return { el, title: 'Sky Atlas', leave: () => { left = true; offMe(); offScout(); offSight(); scout(null); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
+  return { el, title: 'Sky Atlas', leave: () => { left = true; framer.dispose(); offWorld(); world.dispose(); offMe(); offScout(); offSight(); scout(null); clearTimeout(retry); scene?.dispose(); tip.dispose(); bar.dispose(); } };
 }

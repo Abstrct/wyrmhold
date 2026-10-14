@@ -31,7 +31,7 @@ export function icon(path: string, size = 18) {
   const p = document.createElementNS(ns, 'path'); p.setAttribute('d', path); svg.append(p);
   return svg;
 }
-export const ICON = { close: 'M6 6l12 12M18 6L6 18', arrow: 'M5 12h14M13 6l6 6-6 6', warn: 'M12 3l10 18H2zM12 10v5M12 18v.5', key: 'M15 7a4 4 0 1 1-3.9 4.9L3 20v-3h3v-3h3l2.1-2.1A4 4 0 0 1 15 7z' };
+export const ICON = { close: 'M6 6l12 12M18 6L6 18', arrow: 'M5 12h14M13 6l6 6-6 6', warn: 'M12 3l10 18H2zM12 10v5M12 18v.5', key: 'M15 7a4 4 0 1 1-3.9 4.9L3 20v-3h3v-3h3l2.1-2.1A4 4 0 0 1 15 7z', menu: 'M4 7h16M4 12h16M4 17h16' };
 
 /** The roads, grouped by what they are for: play, the economy of mana, and learning. */
 const ROADS: [string, string, string][][] = [
@@ -40,8 +40,9 @@ const ROADS: [string, string, string][][] = [
   [['/bestiary', 'Bestiary', 'Every beast and hallow'], ['/grimoire', 'Grimoire', 'The lore and the glossary']],
 ];
 
-/** The top bar. Returns the element and a disposer for its listeners. */
-export function topbar(route: string, onSoulstone: (start?: 'words') => void, opts: { meters?: boolean } = {}) {
+/** The top bar. Returns the element and a disposer for its listeners. `world` is a screen's own control for its
+ * sky (see ui/world.ts); it sits first among the bar's buttons. */
+export function topbar(route: string, onSoulstone: (start?: 'words') => void, opts: { meters?: boolean; world?: HTMLElement } = {}) {
   const dot = h('span', { class: 'link-dot' });
   const bell = h('span', { class: 'mono faint', style: { fontSize: '12px' } });
   const stone = h('button', { type: 'button', class: 'btn small', 'data-tut': 'soulstone', title: 'Your soulstone: your warden, soul-words and details', onclick: () => onSoulstone() });
@@ -51,12 +52,28 @@ export function topbar(route: string, onSoulstone: (start?: 'words') => void, op
   const music = h('button', { type: 'button', class: 'icon-btn', style: { width: '36px', height: '36px' }, onclick: () => ambience.toggle() });
   const help = h('button', { type: 'button', class: 'icon-btn help-btn', style: { width: '36px', height: '36px' }, 'aria-label': 'How to play', title: 'How to play', onclick: () => { void import('./help').then((m) => m.openHelp()); } }, '?');
   const meterBox = h('div', { class: 'meters' });
+  const roads = h('nav', { class: 'nav', id: 'realm-roads', 'aria-label': 'Realms' }, ...ROADS.flatMap((group, gi) => [gi ? h('span', { class: 'nav-sep', 'aria-hidden': 'true' }) : null,
+    ...group.map(([href, label, tip]) => h('a', { href, title: tip, class: route === href ? 'on' : '', 'aria-current': route === href ? 'page' : null }, label))]));
+  // a phone held sideways has room for one slim row: the roads fold into a menu named for where you are
+  const here = ROADS.flat().find(([href]) => href === route)?.[1] || 'Roads';
+  const menu = h('button', { type: 'button', class: 'btn small nav-menu', 'aria-expanded': 'false', 'aria-controls': 'realm-roads', 'aria-label': `Roads: ${here}`, title: 'Every road in the realm', onclick: () => fold(!bar.classList.contains('nav-open')) },
+    icon(ICON.menu, 16), h('span', { class: 't' }, here));
   const bar = h('header', { class: 'glass topbar' + (opts.meters ? ' with-meters' : '') },
     h('a', { class: 'brand', href: '/' }, sigil(), h('span', null, h('b', null, 'Wyrmhodl'), h('small', null, h('span', { class: 'row', style: { gap: '6px' } }, dot, bell)))),
     opts.meters ? meterBox : null,
-    h('nav', { class: 'nav', 'aria-label': 'Realms' }, ...ROADS.flatMap((group, gi) => [gi ? h('span', { class: 'nav-sep', 'aria-hidden': 'true' }) : null,
-      ...group.map(([href, label, tip]) => h('a', { href, title: tip, class: route === href ? 'on' : '', 'aria-current': route === href ? 'page' : null }, label))])),
-    h('div', { class: 'row bar-actions', style: { gap: '6px' } }, nag, help, music, stone));
+    menu, roads,
+    h('div', { class: 'row bar-actions', style: { gap: '6px' } }, opts.world || null, nag, help, music, stone));
+  const away = (e: Event) => { if (!(e.target as HTMLElement)?.closest?.('.nav, .nav-menu')) fold(false); };
+  const escMenu = (e: KeyboardEvent) => { if (e.key === 'Escape') { fold(false); menu.focus({ preventScroll: true }); } };
+  function fold(open: boolean) {
+    bar.classList.toggle('nav-open', open);
+    menu.setAttribute('aria-expanded', String(open));
+    document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', escMenu);
+    if (!open) return;
+    roads.style.setProperty('--menu-x', `${menu.offsetLeft}px`);
+    document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', escMenu);
+    (roads.querySelector<HTMLElement>('a.on') || roads.querySelector<HTMLElement>('a'))?.focus({ preventScroll: true });
+  }
   const paint = () => {
     dot.className = 'link-dot ' + (live.state === 'live' ? 'live' : live.state === 'down' ? 'down' : '');
     bell.textContent = live.state === 'live' ? 'the sky is awake' : live.state === 'down' ? 'the sky is silent' : 'reaching the sky…';
@@ -85,7 +102,7 @@ export function topbar(route: string, onSoulstone: (start?: 'words') => void, op
   // heralds on narrower screens speak just below the bar, not over its buttons
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { if (bar.isConnected) document.documentElement.style.setProperty('--bar-bottom', `${Math.max(0, Math.round(bar.getBoundingClientRect().bottom + (bar.closest('.scrolls')?.scrollTop ?? 0)))}px`); }) : null;
   ro?.observe(bar);
-  return { el: bar, dispose: () => { offs.forEach((f) => f()); closeGloss(); ro?.disconnect(); } };
+  return { el: bar, dispose: () => { offs.forEach((f) => f()); closeGloss(); ro?.disconnect(); fold(false); } };
 }
 
 export function wardOf(p: PlayerState | null) { return num(p?.planet?.planetAttributes?.planetaryShield); }
@@ -167,7 +184,8 @@ export function paintMeters(box: HTMLElement, p: PlayerState | null) {
     meter('alpha', 'm-alpha',
       h('span', { class: 'k' }, h('span', null, glyph('alpha', 13), 'Alpha')), h('span', { class: 'v' }, fmtAlpha(p.alpha), h('small', { class: 'alpha-glyph' }, ' α'))),
     meter('root', 'm-root' + (p.ore > 0 ? ' risk' : ''),
-      h('span', { class: 'k' }, h('span', null, glyph('wildroot', 13), 'Wildroot')), h('span', { class: 'v' }, String(p.ore), h('small', null, p.ore === 1 ? ' sheaf' : ' sheaves'))),
+      // where meters are small the label is short ("Root"), drawn from data-short so it is never read twice
+      h('span', { class: 'k' }, h('span', null, glyph('wildroot', 13), h('span', { class: 'mk', 'data-short': 'Root' }, 'Wildroot'))), h('span', { class: 'v' }, String(p.ore), h('small', null, p.ore === 1 ? ' sheaf' : ' sheaves'))),
     meter('mana', 'm-mana',
       h('span', { class: 'k' }, h('span', null, glyph('mana', 13), 'Mana'), h('span', { title: `Your beasts drink ${fmtMana(load)} of the ${fmtMana(cap)} your leylines pour` },
         h('span', { class: 'long' }, spare >= 0n ? `${fmtMana(spare)} spare` : `${fmtMana(-spare)} short`), h('span', { class: 'short' }, spare >= 0n ? fmtMana(spare) : `−${fmtMana(-spare)}`))),

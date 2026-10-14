@@ -10,23 +10,39 @@ import { HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, fmtMana, hom
 import { mark } from '../core/nav';
 import { pageTitle } from '../pages';
 import { owned } from '../realm';
+import { worldView, openSky, fitFor, keepFramed, PHONE_UPRIGHT, PHONE_SIDEWAYS } from '../ui/world';
 
 export function bestiary(ctx: Ctx): Screen {
   let type = typeFromSlug(ctx.param) || 1;
   // an old numbered link (/bestiary/9) settles on the beast's name
   if (ctx.param && ctx.param !== slugOf(type)) mark(`/bestiary/${slugOf(type)}`);
   const canvas = h('canvas');
-  const bar = topbar('/bestiary', ctx.oath, { meters: true });
+  // "look at the world": the panels tuck away and the beast stands alone on its dais
+  const world = worldView('bestiary', { home: () => scene.get()?.home(), homeLabel: 'Reset view' });
+  const bar = topbar('/bestiary', ctx.oath, { meters: true, world: world.el });
   const index = h('aside', { class: 'glass panel col-l scroll-y', 'aria-label': 'Bestiary index', style: { overflowY: 'auto' } });
   const sheet = h('section', { class: 'glass panel rise', 'aria-label': 'Beast lore', style: { flex: '0 1 420px', minWidth: '280px', padding: '22px' } });
   const el = h('div', { class: 'screen' }, h('div', { class: 'stage' }, canvas),
     h('div', { class: 'hud' }, bar.el, h('div', { class: 'isle-window', 'aria-hidden': 'true' }), h('div', { class: 'cols through beast-cols' }, index, sheet)));
-  const scene = mountScene(canvas, (c) => K.circle(c, { type }));
+  const scene = mountScene(canvas, (c) => K.circle(c, { type, onView: (m: boolean) => world.moved(m) }), () => framer.soon());
+
+  /** Keep the dais in the open sky between the index and the sheet (it was half behind the sheet on a tablet). */
+  function reframe() {
+    const ctl = scene.get();
+    if (!ctl || !canvas.isConnected) return;
+    const g = openSky(canvas, { window: matchMedia(PHONE_UPRIGHT).matches ? el.querySelector('.isle-window') : null, tops: [bar.el], sides: [index, sheet] });
+    // the dais was framed for a gap about half the screen wide: stand back when it is narrower
+    if (g) ctl.frame(g.dx, g.dy, fitFor(g, 0.48, 1.5));
+  }
+  const framer = keepFramed(reframe);
+  const offWorld = world.onChange(() => framer.soon());
 
   function choose(id: number) {
     type = id; scene.get()?.show(id); mark(`/bestiary/${slugOf(id)}`); document.title = pageTitle(`/bestiary/${slugOf(id)}`) || document.title; paint();
     // on a phone the beast and its lore sit above the list: bring them back into view
-    if (matchMedia('(max-width: 720px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (matchMedia(PHONE_UPRIGHT).matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+    // held sideways the panels scroll in their own layer: back to the sheet's top
+    else if (matchMedia(PHONE_SIDEWAYS).matches) el.querySelector('.hud')?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function paint() {
@@ -77,8 +93,9 @@ export function bestiary(ctx: Ctx): Screen {
         h('button', { type: 'button', class: 'btn', onclick: () => scene.get()?.summon(type) }, 'Watch it summoned'),
         p ? h('a', { class: 'btn gold', href: '/hold' }, type === 1 ? 'Meet yours at your Hold' : t.buildLimit && owned(p, type) >= t.buildLimit ? 'Yours is at your Hold' : 'Summon at your Hold')
           : h('button', { type: 'button', class: 'btn gold', onclick: () => ctx.oath() }, 'Swear the oath first')));
+    framer.soon();
   }
   const off = empire.onChange(paint);
   paint();
-  return { el, title: 'Bestiary', leave: () => { off(); scene.dispose(); bar.dispose(); } };
+  return { el, title: 'Bestiary', leave: () => { off(); framer.dispose(); offWorld(); world.dispose(); scene.dispose(); bar.dispose(); } };
 }

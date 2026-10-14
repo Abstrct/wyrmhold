@@ -8,6 +8,7 @@ export const DEVICES = [
   ['laptop 1280×800', { width: 1280, height: 800 }],
   ['small laptop 1024×700', { width: 1024, height: 700 }],
   ['tablet 768×1024', { width: 768, height: 1024, mobile: true }],
+  ['tablet landscape 1180×820', { width: 1180, height: 820, mobile: true }],
   ['phone 390×844', { width: 390, height: 844, mobile: true }],
   ['phone landscape 844×390', { width: 844, height: 390, mobile: true }],
 ];
@@ -87,6 +88,106 @@ export default async function (t, ctx) {
       expect.ok(Math.abs(r.canvasW - vp.width) < 4, `the canvas follows the viewport (${r.canvasW} vs ${vp.width})`);
     }
     expect.noErrors(page.errors(ALLOW), 'console');
+  });
+
+  /* ── The world behind the panels (2026-10-14 playtests: "Bro let me SEE my dragon") ── */
+  const PHONE_UP = { width: 390, height: 844, mobile: true }, PHONE_SIDE = { width: 844, height: 390, mobile: true }, TABLET = { width: 1180, height: 820, mobile: true };
+  /** The share of the screen where a touch lands on the sky itself (a grid of probes; tags and windows let touches through). */
+  const openShare = () => page.eval(`(() => { const c = document.querySelector('#app .stage canvas'); let open = 0, n = 0; for (let y = 4; y < innerHeight; y += innerHeight / 16) for (let x = 4; x < innerWidth; x += innerWidth / 24) { n++; if (document.elementFromPoint(x, y) === c) open++; } return open / n; })()`);
+  /** Where a unit is on screen this frame (through the scene's own camera), and whether a touch there would reach the sky. */
+  const onScreen = (id) => page.eval(`(() => { const c = document.querySelector('#app .stage canvas'), k = c.__wyrmCtl, st = window.__wyrmStage; const w = k && k.where(${JSON.stringify(id)}); if (!w || !st) return null; const v = st.camera.position.clone().set(w[0], w[1], w[2]); st.camera.updateMatrixWorld(); v.project(st.camera); const b = c.getBoundingClientRect(); const x = b.left + (v.x + 1) / 2 * b.width, y = b.top + (1 - v.y) / 2 * b.height; const inside = v.z < 1 && x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight; const at = inside ? document.elementFromPoint(x, y) : null; return { x: Math.round(x), y: Math.round(y), inside, open: at === c, under: at && at !== c ? (at.closest('section, aside, nav, header, .glass') || at).getAttribute('aria-label') || at.className : null }; })()`);
+
+  await t.test('“look at the world” tucks the panels away and brings them back, remembered per screen, by key and touch', 'S1', async (c) => {
+    const bad = [];
+    for (const [route, vp] of [['#/hold', PHONE_SIDE], ['#/skirmish/' + ctx.sky.foe.pid, PHONE_SIDE], ['#/bestiary', PHONE_UP], ['#/atlas', TABLET]]) {
+      await openGame(page, ctx.app.url, route, { sworn: true, playerId: ctx.sky.me.pid, viewport: vp });
+      await awake(page); await sleep(1200);
+      const state = () => page.eval(`(() => { const b = document.querySelector('.world-btn'); const shown = (s) => [...document.querySelectorAll(s)].some((e) => e.getClientRects().length > 0); const r = b && b.getBoundingClientRect(); const u = document.querySelector('.btn.unleash'), ur = u && u.getBoundingClientRect();
+        return { has: !!b, name: b && b.getAttribute('aria-label'), pressed: b && b.getAttribute('aria-pressed'), on: document.body.classList.contains('world-view'), panels: shown('.hud .cols > *'), btnOn: !!r && r.width > 0 && r.top >= 0 && r.bottom <= innerHeight && r.right <= innerWidth, h: r ? Math.round(r.height) : 0, focusable: !!b && b.tabIndex >= 0, strike: !!ur && ur.width > 0 && ur.top >= 0 && ur.bottom <= innerHeight }; })()`);
+      const s0 = await state();
+      if (!s0.has || !s0.name || s0.pressed !== 'false' || !s0.focusable) { bad.push(`${route}: no named, focusable toggle (${JSON.stringify(s0)})`); continue; }
+      if (!s0.panels) bad.push(`${route}: the panels were hidden before the toggle`);
+      if (vp.mobile && s0.h < 36) bad.push(`${route}: the toggle is ${s0.h}px tall, under a finger's 36`);
+      await page.clickSel('.world-btn'); await sleep(900);
+      const s1 = await state();
+      if (!s1.on || s1.pressed !== 'true' || s1.panels) bad.push(`${route}: the toggle did not tuck the panels away (${JSON.stringify(s1)})`);
+      if (!s1.btnOn) bad.push(`${route}: the way back is not on screen in the world view`);
+      if (route.startsWith('#/skirmish') && !s1.strike) bad.push(`${route}: the strike button vanished with the panels: a fight could not go on`);
+      if (vp === PHONE_SIDE && route === '#/hold') { const share = await openShare(); if (share < 0.8) bad.push(`${route}: the world view leaves only ${Math.round(share * 100)}% of the screen to the sky`); await page.screenshot(c.evidencePath('hold-world-view-844.png')); }
+      // remembered: leave the screen and come back
+      await page.eval(`location.hash = '#/grimoire'`); await sleep(600); await page.eval(`location.hash = ${JSON.stringify(route)}`); await sleep(1500);
+      const s2 = await state();
+      if (!s2.on || s2.pressed !== 'true') bad.push(`${route}: the world view was not remembered on coming back`);
+      // Escape brings the panels back
+      await page.eval(`document.querySelector('.world-btn').focus()`);
+      await page.key('Escape', { code: 'Escape' }); await sleep(700);
+      const s3 = await state();
+      if (s3.on || s3.pressed !== 'false' || !s3.panels) bad.push(`${route}: Escape did not bring the panels back (${JSON.stringify(s3)})`);
+    }
+    expect.eq(bad.length, 0, 'world view failures', bad);
+    expect.noErrors(page.errors(ALLOW), 'console');
+  });
+
+  await t.test('a phone held sideways (844×390): one slim bar, and a useful share of the sky open on the Hold and the Skirmish', 'S1', async (c) => {
+    const bad = [], seen = [];
+    for (const [name, route] of [['hold', '#/hold'], ['skirmish', '#/skirmish/' + ctx.sky.foe.pid]]) {
+      await openGame(page, ctx.app.url, route, { sworn: true, playerId: ctx.sky.me.pid, viewport: PHONE_SIDE });
+      await awake(page); await sleep(2000);
+      const share = await openShare();
+      const bar = await page.eval(`(() => { const r = document.querySelector('.topbar').getBoundingClientRect(); const m = document.querySelector('.nav-menu'); return { h: Math.round(r.height), menu: !!m && m.getClientRects().length > 0 }; })()`);
+      seen.push(`${name}: ${Math.round(share * 100)}% open sky, bar ${bar.h}px`);
+      if (share < 0.35) bad.push(`${name}: only ${Math.round(share * 100)}% of the screen shows the sky`);
+      if (bar.h > 64) bad.push(`${name}: the top bar is ${bar.h}px of 390`);
+      if (!bar.menu) bad.push(`${name}: the roads have no menu`);
+      if (name === 'skirmish') {
+        const u = await page.eval(`(() => { const r = document.querySelector('.btn.unleash').getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; })()`);
+        if (u.bottom > PHONE_SIDE.height) bad.push(`skirmish: the big button is below the fold (${u.top}–${u.bottom})`);
+      }
+      await page.screenshot(c.evidencePath(`${name}-844x390.png`));
+    }
+    // the roads menu opens, lists every road, and closes on Escape
+    await page.clickSel('.nav-menu'); await sleep(300);
+    const roads = await page.eval(`[...document.querySelectorAll('.topbar .nav a')].filter((a) => a.getClientRects().length > 0).map((a) => a.textContent)`);
+    if (roads.length < 6) bad.push(`the roads menu shows ${roads.length} roads`);
+    await page.key('Escape', { code: 'Escape' }); await sleep(200);
+    if (await page.eval(`document.querySelector('.topbar').classList.contains('nav-open')`)) bad.push('Escape did not fold the roads menu');
+    ctx.report.note('sideways phone: ' + seen.join(' · '));
+    expect.eq(bad.length, 0, 'sideways phone layout', bad);
+    expect.noErrors(page.errors(ALLOW), 'console');
+  });
+
+  await t.test('choosing a flying beast frames it where the warden can see it (phone upright, sideways, tablet), and follows it', 'S1', async (c) => {
+    const me = ctx.sky.me, flyers = [[me.beasts[5].Struct.id, 'Shade Owl'], [me.beasts[3].Struct.id, 'Moth Galleon']];
+    const bad = [];
+    for (const [dev, vp] of [['390×844', PHONE_UP], ['844×390', PHONE_SIDE], ['1180×820', TABLET]]) {
+      await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: me.pid, viewport: vp });
+      await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(1500);
+      for (const [id, name] of flyers) {
+        await page.eval(`document.querySelector('.roster-panel .item[data-key=${JSON.stringify(id)}]').click(); window.scrollTo(0, 0); document.querySelector('.hud').scrollTop = 0;`);
+        await sleep(5000);
+        const a = await onScreen(id);
+        await sleep(3000);
+        const b = await onScreen(id);
+        for (const [when, p] of [['once settled', a], ['three seconds on', b]]) if (!p || !p.inside || !p.open) bad.push(`${dev}: the ${name} ${when} is ${!p ? 'nowhere' : !p.inside ? `off screen (${p.x}, ${p.y})` : `under ${p.under} (${p.x}, ${p.y})`}`);
+        if (vp === TABLET) await page.screenshot(c.evidencePath(`${name.replace(' ', '-')}-${dev}.png`));
+      }
+    }
+    expect.eq(bad.length, 0, 'flyers framed out of sight', bad);
+    expect.noErrors(page.errors(ALLOW), 'console');
+  });
+
+  await t.test('the Elder Wyrm card’s realm buttons are fully on screen and touchable at 1280×800 and 1180×820', 'S1', async (c) => {
+    const bad = [];
+    for (const vp of [{ width: 1280, height: 800 }, TABLET]) {
+      await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: vp });
+      await awake(page); await page.waitFor(`document.querySelectorAll('.roster-panel .item').length > 5`, { what: 'the roster' }); await sleep(1200);
+      await page.eval(`document.querySelector('.roster-panel .item[data-key=${JSON.stringify(ctx.sky.me.beasts[0].Struct.id)}]').click()`); await sleep(1200);
+      const r = await page.eval(`(() => { const g = document.querySelector('[aria-label="Soar to a realm"]'); if (!g) return null; return [...g.querySelectorAll('button')].map((b) => { const q = b.getBoundingClientRect(); const at = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2); return { t: b.textContent, top: Math.round(q.top), bottom: Math.round(q.bottom), on: q.top >= 0 && q.bottom <= innerHeight && q.left >= 0 && q.right <= innerWidth, hit: !!at && b.contains(at) }; }); })()`);
+      if (!r) { bad.push(`${vp.width}×${vp.height}: no realm buttons on the Wyrm's card`); continue; }
+      for (const b of r) if (!b.on || !b.hit) bad.push(`${vp.width}×${vp.height}: ${b.t} is ${!b.on ? 'off screen' : 'covered'} (${b.top}–${b.bottom})`);
+      await page.screenshot(c.evidencePath(`wyrm-card-${vp.width}x${vp.height}.png`));
+    }
+    expect.eq(bad.length, 0, 'realm buttons out of reach', bad);
   });
   await page.close();
 }
