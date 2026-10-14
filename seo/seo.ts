@@ -33,7 +33,7 @@ const PLACES: [string, string, string][] = [
 const TALE = [
   'When the sky broke, alpha fell like rain.',
   'Wyrmhodl is a sky-realm of floating isles above a sea of cloud. Bind a soulstone, swear to a coven, seek your isle and hatch your Elder Wyrm. Delve wildroot from your isle’s marrow and brew it into alpha, the first light: it wakes your springs, calls beasts out of the circle, and once brewed can never be stolen. Then read the sky, ride out, and take what other wardens leave unbrewed.',
-  'Every warden you meet is a real player, and every rite you speak is sealed with your own soulstone and written into the ledger. Your soulstone stays sealed in your browser.',
+  'Every warden you meet is a real person, and every rite you speak is sealed with your own soulstone and written into the ledger. Your soulstone stays sealed in your browser.',
 ];
 
 const entries = Object.entries(BEASTS).map(([id, l]) => ({ ...l, hallow: typeOf(Number(id))?.category === 'planet' }));
