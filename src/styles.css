@@ -245,6 +245,17 @@ table.t td.code { font: 500 13px var(--mono); color: var(--verdigris); white-spa
 .path-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(232,200,114,.4); background: transparent; color: var(--gold-hi); font: 500 14px var(--sans); }
 .path-burst { position: absolute; left: 50px; top: 46px; pointer-events: none; }
 .path-burst i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #ffe7a0; box-shadow: 0 0 10px #ffd27a; animation: burst 1.3s cubic-bezier(.15,.8,.3,1) forwards; }
+/* Ysolde's pill steps to another corner when its own would cover what she points at (guide.ts stepAside) */
+.path.min.at-br { left: auto; right: 16px; }
+.path.min.at-tr { left: auto; right: 16px; top: 16px; bottom: auto; }
+.path.min.at-tl { left: 16px; right: auto; top: 16px; bottom: auto; }
+/* on a phone the pill is only as wide as itself: a full-width strip took the taps meant for the rows under it */
+@media (max-width: 720px) {
+  .path.min { right: auto; }
+  .path.min.at-br, .path.min.at-tr { left: auto; right: 8px; }
+  .path.min.at-tl { left: 8px; }
+  .path.min.at-tr, .path.min.at-tl { top: 8px; }
+}
 @keyframes burst { from { transform: translate(0,0) scale(1); opacity: 1 } to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0 } }
 @keyframes tutglow { 0%, 100% { box-shadow: 0 0 0 0 rgba(232,200,114,.0), 0 0 18px rgba(232,200,114,.35) } 50% { box-shadow: 0 0 0 8px rgba(232,200,114,.18), 0 0 36px rgba(232,200,114,.7) } }
 
@@ -815,6 +826,17 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 .btn.unleash.waiting .ub-fill { height: 100%; background: linear-gradient(90deg, rgba(255, 138, 90, .35), rgba(255, 192, 74, .3)); }
 .fc-pending { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
 .fc-pending:empty { display: none; }
+/* what can strike your Wyrm while you stay (not only this blow's answer), and the danger when it could fall */
+.fc-chip .s { font-size: 10.5px; line-height: 1.25; color: var(--faint); }
+.fc-exposed { display: flex; gap: 7px; align-items: flex-start; margin: 8px 0 0; font-size: 13.5px; line-height: 1.4; color: var(--ink-2); }
+.fc-exposed svg { flex: none; margin-top: 2px; }
+.fc-exposed.good { color: #b9f3e3; } .fc-exposed.good svg { display: none; }
+.fc-exposed.warn { color: var(--gold-hi); }
+.fc-exposed.bad { color: var(--ember-ink); }
+.fc-danger { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 0; padding: 8px 10px; border-radius: 12px; background: rgba(160, 30, 20, .35); border: 1px solid rgba(255, 90, 60, .75); color: #ffe1d6; font-size: 13.5px; line-height: 1.4; }
+.fc-danger p { flex: 1 1 260px; margin: 0; }
+.fc-danger-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.fc-danger .btn { min-height: 38px; }
 
 /* the fray: every blow, newest first */
 .fray .fray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(232,200,114,.35) transparent; }

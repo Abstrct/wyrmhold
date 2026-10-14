@@ -12,6 +12,7 @@ import { wallet } from '../wallet/wallet';
 import { txq, type TxJob } from '../wallet/queue';
 import { claimJob, releaseClaim } from '../core/claims';
 import { markPath, pathHas } from '../ui/guide';
+import { NO_MENDING } from '../game/war';
 import { STRUCT_TYPES, typeOf, type Ambit } from '../data/catalogue';
 import { num } from '../chain/lcd';
 import { live } from '../chain/live';
@@ -274,6 +275,9 @@ export function hold(ctx: Ctx): Screen {
       // a beast still being summoned: say where its progress shows and that it needs nothing more
       !s.built ? h('p', { class: 'path-wait', style: { marginTop: '10px' } }, h('span', { class: 'k' }, 'Summoning'),
         mine && wallet.unlocked ? 'Its chant is being sung in Incantations below. It wakes on its own when the chant lands.' : 'Its summoning is not finished yet.') : '',
+      // no rite heals: a wounded beast's hearts are what it has left, and the card says so plainly
+      s.built && s.health < t.maxHealth ? h('p', { class: 'path-wait wound-note', style: { marginTop: '10px' } }, h('span', { class: 'k' }, 'Wounded'),
+        `${s.health} of ${t.maxHealth} hearts. ${NO_MENDING}`) : '',
       h('p', { style: { margin: '12px 0 0', fontSize: '15px', color: '#cfc5dd' } }, L.tale));
     if (!mine) { card.append(h('p', { class: 'faint', style: { marginTop: '12px', fontSize: '14px' } }, 'You are watching. Only its warden can command it.')); return; }
     const row = h('div', { class: 'row', style: { marginTop: '14px' } });

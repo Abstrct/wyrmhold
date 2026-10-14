@@ -205,6 +205,139 @@ export function moves(mine: OwnedStruct[], marks: OwnedStruct[], me: PlayerState
   return out.sort((x, y) => y.score - x.score);
 }
 
+/* ── While you hang there: what of theirs can strike yours ───────────── */
+
+/** Bells without a rite after which a warden is long asleep, and unlikely to strike (the Atlas says so too). */
+export const LONG_ASLEEP = 14400;
+/** The truth about hearts, said wherever a wounded beast's hearts are: the ledger has no rite that heals. */
+export const NO_MENDING = 'Wounds never mend. A fallen beast can be summoned anew at full hearts.';
+
+export interface Exposure {
+  /** The beast at risk: your Elder Wyrm, or a striker. */
+  on: OwnedStruct;
+  /** Each beast of theirs that can reach it, and the most one blow of it takes from it. */
+  by: { s: OwnedStruct; dmg: number }[];
+  /** A guard of yours in its realm: their blows land on it first. */
+  guard?: OwnedStruct;
+  /** The most one of their blows takes from it. */
+  worst: number;
+  /** How many of their blows, each their worst, would fell it (through its guards first). Infinity when none can. */
+  blows: number;
+  /** It could fall if each beast that reaches it strikes once (after the hearts this blow's answer takes). */
+  falls: boolean;
+  /** Hearts it would keep after that round (zero or less: fallen). */
+  left: number;
+}
+
+/** What of `foes` can strike `on` while the warbands share a sky, by realm reach, stone-skin and guard, the
+ * ledger's rules as forecast() keeps them. `first`: hearts it loses before their round (this blow's answer). */
+export function exposure(on: OwnedStruct, foes: OwnedStruct[], owner: PlayerState | null, first = 0): Exposure {
+  const reaching: { s: OwnedStruct; w: WeaponSystem }[] = [];
+  for (const s of foes) {
+    if (s.id === on.id || !alive(s) || !s.online || s.type!.category !== 'fleet') continue;
+    const r = reach(s, on);
+    if (r.weapon) reaching.push({ s, w: r.weapon });
+  }
+  // the first guard in its realm takes the blow; when it falls, the next does
+  const blockers = owner ? guardsOf(on, owner).filter((g) => g.ambit === on.ambit) : [];
+  /** The most one blow of `s` takes from `t`, struck with nothing in the way. */
+  const hit = (s: OwnedStruct, w: WeaponSystem, t: OwnedStruct) => forecast(s, t, w, null)?.dmg.max ?? 0;
+  const per = reaching.map(({ s, w }) => ({ s, me: hit(s, w, on), guards: blockers.map((g) => hit(s, w, g)) }));
+  // blow after blow, their worst each time: through the guards, then on it
+  let blows = per.length ? 0 : Infinity;
+  for (let i = 0; i < blockers.length && blows !== Infinity; i++) {
+    const best = Math.max(0, ...per.map((p) => p.guards[i]));
+    blows = best ? blows + Math.ceil(blockers[i].health / best) : Infinity;
+  }
+  const worst = Math.max(0, ...per.map((p) => p.me));
+  if (blows !== Infinity) blows = worst ? blows + Math.ceil(Math.max(0, on.health - first) / worst) : Infinity;
+  // one round: each that reaches strikes once, the hardest first
+  const gh = blockers.map((g) => g.health);
+  let hp = on.health - first, g = 0;
+  for (const p of [...per].sort((x, y) => y.me - x.me)) {
+    while (g < gh.length && gh[g] <= 0) g++;
+    if (g < gh.length) gh[g] -= p.guards[g]; else hp -= p.me;
+  }
+  return { on, by: per.map((p) => ({ s: p.s, dmg: p.me })), guard: blockers[0], worst, blows, falls: per.length > 0 && hp <= 0, left: hp };
+}
+
+/** A raid played out on paper: the wisest blow that lands on their Elder Wyrm or its guard, each time, every
+ * answer at its worst, until their Wyrm falls or ours does. Their own blows are not struck here (see exposure). */
+export function raidRun(me: PlayerState, foe: PlayerState, limit = 16): { wins: boolean; blows: number; breath: number; left: number; reached: boolean } {
+  const copy = (p: PlayerState): PlayerState => ({ ...p, structs: new Map([...p.structs].map(([k, s]) => [k, { ...s }])) });
+  const m = copy(me), f = copy(foe);
+  const myW = wyrmOf(m), tw = wyrmOf(f);
+  if (!myW || !alive(myW)) return { wins: false, blows: 0, breath: 0, left: 0, reached: false };
+  // their Wyrm fallen, abroad or asleep: the ward is already open, nothing need be struck
+  if (!wardKeeper(f)) return { wins: true, blows: 0, breath: 0, left: myW.health, reached: true };
+  const home = f.fleet?.status !== 'away';
+  let blows = 0, breath = 0;
+  for (; blows < limit; ) {
+    const mine = [...m.structs.values()].filter((s) => alive(s) && s.online && s.type!.category === 'fleet');
+    const marks = [...f.structs.values()].filter((s) => alive(s) && (s.type!.category === 'planet' || home));
+    const mv = moves(mine, marks, m, f).find((x) => x.goal && x.f.dmg.max > 0);
+    if (!mv) return { wins: false, blows, breath, left: myW.health, reached: blows > 0 };
+    blows++; breath += mv.f.arm.charge;
+    const fc = mv.f, on = fc.hitsOn, t = mv.t;
+    // a blow most often turned aside is counted as turned aside; one that lands, at its least
+    if (fc.land >= 0.5) { on.health -= fc.dmg.min; if (on.health <= 0) { on.health = 0; on.destroyed = true; } }
+    // every guard answers; the mark answers if it lives; a Thunder Spire lashes
+    const back = fc.back.reduce((n, b) => n + (b.why === 'mark' && (t.destroyed || t.health <= 0) ? 0 : b.dmg), 0);
+    mv.a.health -= back;
+    if (mv.a.health <= 0) { mv.a.health = 0; mv.a.destroyed = true; }
+    if (!alive(myW)) return { wins: false, blows, breath, left: 0, reached: true };
+    if (!tw || !alive(tw)) return { wins: true, blows, breath, left: myW.health, reached: true };
+  }
+  return { wins: false, blows, breath, left: myW.health, reached: true };
+}
+
+export interface RaidOdds {
+  /** A warband like this one comes home from it with its Elder Wyrm, by this reckoning. */
+  safe: boolean;
+  why: 'fallen' | 'open' | 'asleep' | 'unreached' | 'guarded' | 'reached' | 'answers' | 'unreachable';
+  /** Their beasts that can reach your Elder Wyrm while you hang over their isle, and how hard. */
+  ex: Exposure | null;
+  /** Your blows to break their ward, and the hearts your Wyrm keeps from their answers alone. */
+  run: ReturnType<typeof raidRun> | null;
+  asleep: boolean;
+}
+
+/** Would a raid on `foe` cost `me` the Elder Wyrm? Safe when they have long slept, when nothing of theirs can
+ * reach it, or when its guards hold out longer than the raid takes; never when their answers alone fell it. */
+export function raidOdds(me: PlayerState, foe: PlayerState, height: number): RaidOdds {
+  const w = wyrmOf(me);
+  if (!w || !alive(w)) return { safe: false, why: 'fallen', ex: null, run: null, asleep: false };
+  const asleep = !!foe.lastAction && height - foe.lastAction > LONG_ASLEEP;
+  // their beasts strike only from home: a warband abroad hangs over someone else's isle
+  const home = foe.fleet?.status !== 'away';
+  const theirs = home ? [...foe.structs.values()].filter((s) => alive(s) && s.type!.category === 'fleet') : [];
+  const run = raidRun(me, foe);
+  // what reaches it as it rides in (told to the warden), and what is left of it once their answers are taken
+  const ex = exposure(w, theirs, me);
+  const late = exposure(w, theirs, me, w.health - run.left);
+  if (!run.wins && run.left <= 0) return { safe: false, why: 'answers', ex, run, asleep };
+  if (!run.wins) return { safe: false, why: 'unreachable', ex, run, asleep };
+  if (!wardKeeper(foe) && !ex.by.length) return { safe: true, why: 'open', ex, run, asleep };
+  if (asleep) return { safe: true, why: 'asleep', ex, run, asleep };
+  if (!ex.by.length) return { safe: true, why: 'unreached', ex, run, asleep };
+  // they strike as fast as their breath fills: once at once (breath kept), then once per blow's cost
+  const cost = Math.min(...ex.by.map((b) => { const t = b.s.type!; return Math.min(...[t.primaryWeaponCharge, t.secondaryWeaponCharge].filter((c) => c > 0)); }));
+  const theirBlows = 1 + Math.floor(run.breath / Math.max(1, cost));
+  if (ex.guard && late.blows > theirBlows) return { safe: true, why: 'guarded', ex, run, asleep };
+  return { safe: false, why: 'reached', ex, run, asleep };
+}
+
+const NUM = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+/** "three blows", "one blow". */
+export const blowsWord = (n: number) => `${NUM[n] ?? n} ${n === 1 ? 'blow' : 'blows'}`;
+/** "Stone Troll", "Stone Troll and Harpy", "Harpy, Kraken and Stone Troll": each kind once, two alike counted. */
+export function kinds(xs: OwnedStruct[]): string {
+  const c = new Map<string, number>();
+  for (const x of xs) { const n = beastName(x.typeId); c.set(n, (c.get(n) || 0) + 1); }
+  const parts = [...c].map(([n, k]) => (k > 1 ? `${NUM[k] ?? k} ${n}s` : n));
+  return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0] || '';
+}
+
 /* ── After the blow: what the ledger says happened ──────────────────── */
 
 export interface Shot {
