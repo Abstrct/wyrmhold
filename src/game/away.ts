@@ -51,8 +51,10 @@ function readSketch(pid: string): Sketch | null {
 }
 function writeSketch(pid: string, s: Sketch) { try { localStorage.setItem(KEY(pid), JSON.stringify(s)); } catch { /* storage refused: the next visit only hears the harm */ } }
 
-function sketchOf(p: PlayerState): Omit<Sketch, 'at' | 'seen'> {
-  const beasts: Record<string, [number, number, number]> = {};
+/** What the warden holds now. Beasts this read did not see keep what the last sketch knew of them: a read
+ * missing the warband (its own read failed) must not make the next visit tell them as new or lost. */
+function sketchOf(p: PlayerState, prev?: Sketch | null): Omit<Sketch, 'at' | 'seen'> {
+  const beasts: Record<string, [number, number, number]> = { ...(prev?.beasts || {}) };
   for (const s of p.structs.values()) if (s.typeId) beasts[s.id] = [s.typeId, s.built ? 1 : 0, s.destroyed ? 1 : 0];
   return { alpha: p.alpha.toString(), ore: p.ore, beasts };
 }
@@ -69,12 +71,12 @@ const isUnseen = (prev: Sketch, h: Harm) => (prev.seen ? h.height > prev.seen ||
 function goodNews(base: Sketch, p: PlayerState, seized: number): Good[] {
   const out: Good[] = [];
   if (base.beasts) {
-    const known = Object.keys(base.beasts).length > 0;
     for (const s of p.structs.values()) {
       if (s.destroyed || !s.built || !s.typeId) continue;
       const was = base.beasts[s.id];
-      // a summoning that was still being sung, or one begun and finished elsewhere
-      if ((was && !was[1]) || (!was && known)) out.push({ kind: 'woke', typeId: s.typeId, id: s.id });
+      // only a summoning the sketch saw still being sung: a beast it never saw may only have been missed
+      // (a warband read that failed publishes the warden without its warband), and would be told as new
+      if (was && !was[1]) out.push({ kind: 'woke', typeId: s.typeId, id: s.id });
     }
   }
   if (base.ore != null) { const d = p.ore - base.ore + seized; if (d > 0) out.push({ kind: 'delved', n: d }); }
@@ -103,7 +105,7 @@ function make(pid: string) {
   if (!p || p.restored) return;
   made.add(pid);
   const prev = readSketch(pid);
-  const now = sketchOf(p);
+  const now = sketchOf(p, prev);
   const all = harms(pid);
   const top = Math.max(live.height, topOf(all));
   // a first visit in this browser has no "since": it only starts the sketch
@@ -147,7 +149,7 @@ function keepSketch(leaving = false) {
     const p = empire.players.get(pid);
     if (!p || p.restored) continue;
     const prev = readSketch(pid);
-    writeSketch(pid, { ...sketchOf(p), at: Date.now(), seen: prev?.seen, seenKeys: prev?.seenKeys });
+    writeSketch(pid, { ...sketchOf(p, prev), at: Date.now(), seen: prev?.seen, seenKeys: prev?.seenKeys });
   }
 }
 

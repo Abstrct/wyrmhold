@@ -106,6 +106,8 @@ export default async function (t, ctx) {
       await page.waitFor(`/While you were away: Grimwald plundered your isle and your Elder Wyrm fell/.test(document.querySelector('.gate-welcome')?.textContent || '')`, { what: 'the welcome to carry the news', timeout: 90000 })
         .catch(async (e) => { throw new (await import('../lib/report.mjs')).Failure(e.message, [await page.eval(`document.querySelector('.gate-welcome')?.textContent || ''`), await page.eval(`localStorage.getItem('wyrmhold.raidlog.${me.pid}')`)]); });
       expect.eq(await page.eval(`document.querySelector('.gate-welcome').getAttribute('aria-live')`), 'polite', 'the welcome is heard politely');
+      // beasts that were already awake are never told as newly woken (a missed warband read once made them so)
+      expect.ok(!/woke/.test(await page.eval(`document.querySelector('.gate-welcome').textContent`)), 'no beast already awake is told as woken');
       await page.screenshot(c.evidencePath('gate-welcome.png'));
       // (the isle wakes first: under software rendering a page compiling its sky answers nothing for a while)
       await go(page, '#/hold'); await awake(page);
