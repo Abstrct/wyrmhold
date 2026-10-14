@@ -248,8 +248,8 @@ const FIND: Record<string, () => HTMLElement | null> = {
 };
 function tagFinds() { for (const [tag, find] of Object.entries(FIND)) if (!document.querySelector(`[data-tut="${tag}"]`)) { const el = find(); if (el) el.dataset.tut = tag; } }
 /** The first element with this tag that stands on screen (not inside Ysolde). */
-function onScreen(tag: string): HTMLElement | null {
-  for (const el of document.querySelectorAll<HTMLElement>(`[data-tut="${CSS.escape(tag)}"]`)) {
+function onScreen(tag: string, sel = `[data-tut="${CSS.escape(tag)}"]`): HTMLElement | null {
+  for (const el of document.querySelectorAll<HTMLElement>(sel)) {
     if (el.closest('.path')) continue;
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth) return el;
@@ -296,7 +296,8 @@ function setSpot(s: string) { if (!panel) return; for (const x of SPOTS) panel.c
 function targetEl(): HTMLElement | null {
   const tags = glowing ? [glowing.tag] : shownStep ? [shownStep.glow, ...(shownStep.alt || [])].filter((t): t is string => !!t) : [];
   for (const t of tags) { const el = onScreen(t); if (el) return el; }
-  return null;
+  // with no step of hers here, she still keeps clear of the Skirmish's one big button (a pill sat on Leo's Guard)
+  return onScreen('', '.btn.unleash');
 }
 /** What of the target she must leave clear: all of it, or of a tall list, its first rows. */
 function targetRect(el: HTMLElement): DOMRect {
