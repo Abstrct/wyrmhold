@@ -21,6 +21,7 @@ import { glyph } from '../ui/glyphs';
 import { holdTour } from '../ui/tour';
 import { cursorTip } from '../ui/tip';
 import { proclaim } from '../ui/omens';
+import { chantTime } from '../ui/chants';
 
 /** An isle by its warden's name, never its ledger mark. */
 const isleName = (planetId: string) => { for (const pl of empire.players.values()) if (pl.planetId === planetId) return `${playerName(pl)}’s isle`; return 'a far isle'; };
@@ -357,13 +358,14 @@ export function hold(ctx: Ctx): Screen {
     const list = h('div', { class: 'scroll-y summon-list', style: { padding: '4px 2px', maxHeight: '62vh' } });
     // What a new warden needs first leads; then mana, wards, and the beasts of war.
     const next = !owned(p, 14) ? 14 : !owned(p, 15) ? 15 : 0;
+    // real times, as the Incantations panel tells them: a chant ripens with the bells, open or closed
+    const dig = chantTime(typeOf(14)?.oreMiningDifficulty || 14000), brew = chantTime(typeOf(15)?.oreRefiningDifficulty || 28000);
     const GROUPS: [string, string, number[]][] = [
-      ['Grow your hold', 'Dig wildroot and brew it into alpha. Start here.', [14, 15]],
+      ['Grow your hold', `Dig wildroot and brew it into alpha (a sheaf takes ${dig} to delve, ${brew} to brew). Start here.`, [14, 15]],
       ['Mana', 'Feed alpha in and they pour mana for more beasts.', [20, 21, 22]],
       ['Guard your hold', 'Raise your ward so raiders chant longer to break in.', [16, 17, 18, 19]],
       ['Beasts of war', 'They ride with your Wyrm to raid, and stand to defend.', [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]],
     ];
-    const pace = (d: number) => (d <= 250 ? 'quick chant' : d <= 460 ? 'steady chant' : 'long chant');
     const card = (t: (typeof STRUCT_TYPES)[number]) => {
       const limit = t.buildLimit && owned(p, t.id) >= t.buildLimit;
       const circle = freeCircle(p, t);
@@ -379,7 +381,7 @@ export function hold(ctx: Ctx): Screen {
       h('span', { class: 'muted', style: { fontSize: '13px' } }, L.epithet),
       h('span', { class: 'row between', style: { fontSize: '12.5px', color: 'var(--ink-2)' } },
         h('span', { title: 'Mana it drinks while awake', style: { color: 'var(--sky)', fontSize: '13.5px', fontWeight: '700' } }, `${fmtMana(t.buildDraw)} mana`),
-        h('span', { title: 'How long the summoning song takes. Every song gets easier as time passes.' }, pace(t.buildDifficulty)),
+        h('span', { title: 'About how long its summoning chant takes to ripen. It ripens even while Wyrmhodl is closed.' }, `${chantTime(t.buildDifficulty)} chant`),
         h('span', { style: { color: ch >= t.buildCharge ? 'var(--verdigris)' : 'var(--root)' } }, `${t.buildCharge} breath`)),
       why ? h('span', { class: 'why' }, retellError(why)) : null);
     };
@@ -393,7 +395,7 @@ export function hold(ctx: Ctx): Screen {
       h('section', { class: 'scroll wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Summon' },
         h('div', { class: 'row between', style: { flexWrap: 'nowrap', alignItems: 'flex-start' } },
           h('div', null, h('h2', null, 'Summon'), h('p', { style: { margin: '4px 0 12px', color: 'var(--muted)' } },
-            `Spare mana: ${fmtMana(p.capacity + p.connectionCapacity - p.load - p.structsLoad)} · Breath: ${fmtBreath(ch)}. Each summoning takes its mana the moment the circle is drawn.`)),
+            `Spare mana: ${fmtMana(p.capacity + p.connectionCapacity - p.load - p.structsLoad)} · Breath: ${fmtBreath(ch)}. Each summoning takes its mana the moment the circle is drawn; then its chant ripens, even while Wyrmhodl is closed.`)),
           h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => veil.remove() }, '✕')),
         list));
     returnFocusOnClose(veil);

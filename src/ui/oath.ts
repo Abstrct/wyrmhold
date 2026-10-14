@@ -345,6 +345,9 @@ export function openOath(start?: unknown) {
       h('p', { class: 'label', style: { marginTop: '18px' } }, 'Choose a coven'),
       h('p', { class: 'muted', style: { margin: '4px 0 10px', fontSize: '14px' } }, 'A coven shares its leyline so your first rites have mana. Unsure? Take the first one.'),
       covenPicker(check),
+      // the time it takes, said once and plainly before the oath (players learned it too late, 2026-10-13)
+      h('p', { class: 'muted oath-time', style: { margin: '16px 0 0', fontSize: '14px' } },
+        'Know before you swear: a beast takes minutes to hours to summon, and wildroot hours to delve and brew. These chants ripen even while Wyrmhodl is closed; come back to finish them, and brew your wildroot before raiders steal it. While open, Wyrmhodl chants with this device’s spare strength, which can warm a phone.'),
       sworn,
       // a refusal is told under the button that asked
       swearErr ? h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, swearErr)) : '');
