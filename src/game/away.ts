@@ -140,9 +140,9 @@ function consider() {
   }
 }
 
-/** Keep the sketch current while the warden is here (and the page is in sight). */
-function keepSketch() {
-  if (document.visibilityState !== 'visible') return;
+/** Keep the sketch current while the warden is here (and the page is in sight), and as they leave. */
+function keepSketch(leaving = false) {
+  if (!leaving && document.visibilityState !== 'visible') return;
   for (const pid of made) {
     const p = empire.players.get(pid);
     if (!p || p.restored) continue;
@@ -167,15 +167,15 @@ export function followAway() {
   if (started) return;
   started = true;
   empire.onChange(consider);
-  setInterval(keepSketch, TICK_MS);
+  setInterval(() => keepSketch(), TICK_MS);
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { keepSketch(); hiddenAt = Date.now(); return; }
+    if (document.visibilityState === 'hidden') { keepSketch(true); hiddenAt = Date.now(); return; }
     // back after a while: read the ledger again, and say what changed
     if (hiddenAt && Date.now() - hiddenAt > ABSENT_MS) { made.clear(); void readAgain(); consider(); }
     hiddenAt = 0;
   });
-  window.addEventListener('pagehide', keepSketch);
+  window.addEventListener('pagehide', () => keepSketch(true));
   // a report that is up grows with what the record learns (a raider named, a deed read back late)
   onRaidlog((pid) => { if (pid ? reports.has(pid) : reports.size) emit(); });
   wallet.onForget(() => {
