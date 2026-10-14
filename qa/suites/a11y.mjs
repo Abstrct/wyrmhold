@@ -179,5 +179,29 @@ export default async function (t, ctx) {
     await page.screenshot(c.evidencePath('after-pinch.png'));
     expect.noErrors(page.errors(ALLOW), 'console');
   });
+  await t.test('keyboard: Ysolde’s "Show me" moves focus to the control she points at and says so politely; a new step is announced', 'S1', async (c) => {
+    // Sam (2026-10-13): "If it just moved my focus to Summon it would be the best feature in the game for me."
+    const { w, guilds } = ctx.sky;
+    const nw = ctx.worldLib.addWarden(w, { name: 'Owlet', guildId: guilds.hearth.id, beasts: [[1]], planetOre: 5 });
+    w.anyAddressPlayer = nw.pid;
+    try {
+      const storage = { 'wyrmhold.prologue': 'seen', 'wyrmhold.tour.hold': 'seen', 'wyrmhold.music': 'off', 'wyrmhold.path.hidden': '0', ['wyrmhold.path.' + nw.pid]: JSON.stringify({ wyrm: true }) };
+      await openGame(page, ctx.app.url, '#/hold', { storage, sworn: true, playerId: nw.pid, viewport: { width: 1280, height: 800 } });
+      await awake(page);
+      await page.waitFor(`document.querySelector('[data-tut="summon"]') && [...document.querySelectorAll('.path button')].some((b) => /Show me/.test(b.textContent))`, { what: 'Ysolde open on the Hold, and Summon', timeout: 30000 });
+      const live = await page.eval(`(() => { const l = document.querySelector('.path [aria-live]'); return l ? { live: l.getAttribute('aria-live'), text: l.textContent } : null; })()`);
+      expect.eq(live && live.live, 'polite', 'Ysolde speaks through a polite live region');
+      expect.ok(/Summon a Root Delver/.test(live.text), 'the newly current step is announced', live);
+      // by keyboard: focus "Show me" and press Enter
+      await page.eval(`[...document.querySelectorAll('.path button')].find((b) => /Show me/.test(b.textContent)).focus()`);
+      await page.key('Enter');
+      await page.waitFor(`document.activeElement && document.activeElement.dataset.tut === 'summon'`, { what: 'keyboard focus on Summon', timeout: 20000 });
+      await page.waitFor(`/Ysolde points to Summon/.test(document.querySelector('.path [aria-live]').textContent)`, { what: 'the polite word of where she points', timeout: 10000 });
+      const inView = await page.waitFor(`(() => { const r = document.activeElement.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`, { what: 'Summon in view', timeout: 10000 }).then(() => true, () => false);
+      expect.ok(inView, 'the control she points at is in view');
+      await page.screenshot(c.evidencePath('show-me-focus.png'));
+      expect.noErrors(page.errors(ALLOW), 'console');
+    } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
+  });
   await page.close();
 }

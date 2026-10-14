@@ -249,5 +249,50 @@ export default async function (t, ctx) {
     if (/Ledger type|undefined|NaN/.test(text)) c.warn('the roster shows a raw type: ' + text.match(/Ledger type \d+|undefined|NaN/)[0]);
     const st = await stage(page); expect.ok(st.finite, 'camera finite');
   });
+
+  await t.test('a wounded beast’s card says wounds never mend and a fallen one returns at full hearts', 'S2', async () => {
+    // Jordan (2026-10-13): "the way to heal is to die?? That's backwards." The menagerie's Stone Troll has one heart of three.
+    await openHold();
+    const troll = me.beasts.find((s) => s && s.Struct.type === '9');
+    await page.eval(`document.querySelector('.roster-panel [data-key="${troll.Struct.id}"]').click()`);
+    await page.waitFor(`/Stone Troll/.test(document.querySelector('[aria-label="Chosen beast"]').innerText)`, { what: 'the Stone Troll’s card' });
+    const card = await page.eval(`document.querySelector('[aria-label="Chosen beast"]').innerText`);
+    expect.ok(/Wounds never mend/.test(card) && /summoned anew at full hearts/.test(card), 'the card tells the truth about wounds', card.slice(0, 500));
+  });
+
+  await t.test('when the warden’s own Elder Wyrm falls, Ysolde says so kindly and points to Hatch anew, with no cheer in the same breath', 'S1', async (c) => {
+    // Maya (2026-10-13): her Wyrm fell, and Ysolde said "Blood in the clouds. You are a warden now, truly."
+    const w = ctx.sky.w;
+    const nw = ctx.worldLib.addWarden(w, { name: 'Lorn', guildId: ctx.sky.guilds.hearth.id, beasts: [[1]], hallows: [[14], [15]], planetOre: 5 });
+    const wyrm = nw.beasts[0];
+    w.anyAddressPlayer = nw.pid;
+    try {
+      // everything walked but the strike
+      const flags = { wyrm: true, grimoire: true, tithe: true, atlas: true, ride: true };
+      const storage = { 'wyrmhold.prologue': 'seen', 'wyrmhold.tour.hold': 'seen', 'wyrmhold.music': 'off', 'wyrmhold.path.hidden': '0', ['wyrmhold.path.' + nw.pid]: JSON.stringify(flags) };
+      await openGame(page, ctx.app.url, '#/hold', { storage, sworn: true, playerId: nw.pid, viewport: { width: 1280, height: 800 } });
+      await awake(page);
+      await page.waitFor(`/11 of 12|11\\/12/i.test(document.querySelector('.path') ? document.querySelector('.path').innerText : '')`, { what: 'Ysolde at the last step', timeout: 30000 });
+      // the Wyrm falls; in the same breath the blow that walks the last step lands
+      wyrm.structAttributes.status = String(ST.fallen); wyrm.structAttributes.isDestroyed = true; wyrm.structAttributes.health = '0';
+      ctx.ledger.emitTx([{ type: 'EventStruct', key: 'structure', data: { id: wyrm.Struct.id, owner: nw.pid, locationId: nw.fleetId } }]);
+      await page.waitFor(`/Elder Wyrm has fallen/.test(document.querySelector('.hold-omens').innerText)`, { what: 'the Hold to hear of the fall', timeout: 20000 });
+      await page.eval(`(await import('/src/ui/guide.ts')).markPath('strike')`);
+      await sleep(250);
+      const burst = await page.eval(`!!document.querySelector('.path-burst')`);
+      await page.waitFor(`/Your Elder Wyrm has fallen/.test(document.querySelector('.path').innerText)`, { what: 'Ysolde to speak of the loss', timeout: 20000 });
+      await sleep(3500);   // her words type out; a cheer would have been proclaimed by now
+      const r = await page.eval(`({ text: document.querySelector('.path').innerText, live: document.querySelector('.path [aria-live]').textContent, proclaimed: [...document.querySelectorAll('.proclaim')].map((p) => p.innerText).join(' | ') })`);
+      expect.ok(/sorry/i.test(r.text) && /Hatch anew/.test(r.text), 'Ysolde acknowledges the loss kindly and points to Hatch anew', r.text);
+      expect.ok(/hatches anew at full hearts/.test(r.text), 'and tells the truth about hearts', r.text);
+      expect.ok(!/Blood in the clouds|You are a warden now/.test(r.text + r.proclaimed), 'no cheer in the same breath as the loss', r);
+      expect.ok(!burst, 'no celebration burst');
+      expect.ok(/Your Elder Wyrm has fallen/.test(r.live), 'the loss is announced politely', r.live);
+      await page.eval(`[...document.querySelectorAll('.path button')].find((b) => /Show me/.test(b.textContent)).click()`);
+      await page.waitFor(`/^Hatch anew/.test((document.activeElement && document.activeElement.textContent || '').trim())`, { what: '"Show me" to put focus on Hatch anew', timeout: 8000 });
+      await page.screenshot(c.evidencePath('ysolde-wyrm-fallen.png'));
+      expect.noErrors(page.errors(ALLOW), 'console');
+    } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
+  });
   await page.close();
 }
