@@ -59,8 +59,10 @@ export function toast(text: string, kind: Kind = '', ms = 3600, action?: { label
     badge.textContent = '×' + same.n;
     return;
   }
-  const el = h('div', { class: `herald ${kind}` }, h('span', null, speak(text)),
-    action ? h('button', { type: 'button', onclick: () => { action.run(); el.remove(); heralds.delete(key); } }, speak(action.label)) : null);
+  // the words, then the button on its own: read aloud, "…your beast. Defend", never "…your beast.Defend"
+  // (a space between flex items takes no room on screen)
+  const el = h('div', { class: `herald ${kind}` }, h('span', { class: 'herald-text' }, speak(text)),
+    action ? [' ', h('button', { type: 'button', onclick: () => { action.run(); el.remove(); heralds.delete(key); } }, speak(action.label))] : null);
   const t = tray(); t.append(el);
   // keep the tray short: the oldest herald steps aside when a fourth arrives
   while (t.children.length > 3) t.firstElementChild?.remove();

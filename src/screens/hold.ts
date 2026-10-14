@@ -15,12 +15,13 @@ import { markPath, pathHas } from '../ui/guide';
 import { STRUCT_TYPES, typeOf, type Ambit } from '../data/catalogue';
 import { num } from '../chain/lcd';
 import { live } from '../chain/live';
-import { AMBIT_OF_REALM, HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, fmtAlpha, fmtBreath, fmtMana, lore, reachOf, retell, retellError, sheaves, type Realm } from '../lore';
+import { AMBIT_OF_REALM, HALLOW_COLOR, REALMS, REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, fmtBreath, fmtMana, lore, reachOf, retell, retellError, sheaves, type Realm } from '../lore';
 import { freeCircle, owned, playerName, raidersAt, realmOf, unitsOf } from '../realm';
 import { glyph } from '../ui/glyphs';
 import { holdTour } from '../ui/tour';
 import { cursorTip } from '../ui/tip';
 import { proclaim } from '../ui/omens';
+import { awayCard, harmChronicle } from '../ui/harm';
 
 /** An isle by its warden's name, never its ledger mark. */
 const isleName = (planetId: string) => { for (const pl of empire.players.values()) if (pl.planetId === planetId) return `${playerName(pl)}’s isle`; return 'a far isle'; };
@@ -56,7 +57,10 @@ export function hold(ctx: Ctx): Screen {
   const bar = topbar('/hold', ctx.oath, { meters: true });
   const chants = chantsPanel();
   chants.el.setAttribute('data-tut', 'chants');
-  const chron = chroniclePanel((j) => { const p = player(); return !!p && j.playerId === p.playerId; });
+  const ownHold = () => { const p = player(); return !!p && !watching && empire.commands(p.playerId); };
+  // what others did to your hold is told beside your own rites, and the news since your last visit leads
+  const chron = chroniclePanel((j) => { const p = player(); return !!p && j.playerId === p.playerId; }, 30, harmChronicle(player, ownHold, ctx.go));
+  const away = awayCard(player, ownHold, ctx.go);
   const omens = h('div', { class: 'stack hold-omens', style: { alignItems: 'center' } });
   const filters = h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter by realm' });
   const roster = h('ul', { class: 'list scroll-y' });
@@ -73,7 +77,7 @@ export function hold(ctx: Ctx): Screen {
       h('div', { class: 'isle-window', 'aria-hidden': 'true' }),
       h('div', { class: 'cols through' },
         rosterPanel,
-        h('div', { class: 'col-r' }, card, chants.el, chron.el)),
+        h('div', { class: 'col-r' }, away.el, card, chants.el, chron.el)),
       rites));
 
   const tip = cursorTip(canvas);
@@ -138,28 +142,6 @@ export function hold(ctx: Ctx): Screen {
     return ['Awake', '#7dffb0'];
   }
 
-  /** While you were away: what changed in your hold since your last visit (kept per warden). */
-  let away: string | null = null, awayRead = false, awaySaved = 0;
-  const awayKey = (pid: string) => `wyrmhold.away.${pid}`;
-  function readAway(p: PlayerState) {
-    if (awayRead) return;
-    awayRead = true;
-    try {
-      const was = JSON.parse(localStorage.getItem(awayKey(p.playerId)) || 'null') as { at: number; alpha: string; ore: number } | null;
-      if (!was || Date.now() - was.at < 20 * 60_000) return;
-      const da = p.alpha - BigInt(was.alpha), dr = p.ore - was.ore, bits: string[] = [];
-      if (da > 0n) bits.push(`+${fmtAlpha(da)} alpha brewed`);
-      if (dr > 0) bits.push(`+${dr} wildroot dug`);
-      if (dr < 0 && da <= 0n) bits.push(`${-dr} wildroot gone (plundered?)`);
-      if (bits.length) away = `While you were away: ${bits.join(' · ')}.`;
-    } catch { /* nothing to tell */ }
-  }
-  function saveAway(p: PlayerState) {
-    if (Date.now() - awaySaved < 30_000) return;
-    awaySaved = Date.now();
-    try { localStorage.setItem(awayKey(p.playerId), JSON.stringify({ at: Date.now(), alpha: p.alpha.toString(), ore: p.ore })); } catch { /* ignore */ }
-  }
-
   function paintOmens(p: PlayerState | null) {
     clear(omens);
     // omens queue up; the most urgent two show, the rest wait behind "more"
@@ -171,12 +153,6 @@ export function hold(ctx: Ctx): Screen {
     } }, h('span', null, text), action ? h('button', { type: 'button', class: 'btn small', onclick: action[1] }, action[0]) : null) });
     if (!p) return;
     const mine = empire.commands(p.playerId);
-    if (mine && !watching) { readAway(p); saveAway(p); if (away) omen('gold', away, ['Got it', () => {
-      away = null;
-      keepFocus(omens, () => paintOmens(player()));
-      // the button that had focus is gone with its notice: hold focus on the notices themselves
-      if (!omens.contains(document.activeElement)) { omens.tabIndex = -1; ((omens.querySelector('button') as HTMLElement | null) ?? omens).focus({ preventScroll: true }); }
-    }]); }
     // the one safety step that matters most: a soulstone whose words were never kept
     if (mine && !watching && wallet.unlocked && wallet.deviceSealed && !wallet.backedUp) omen('ember', 'Your soul-words are not kept anywhere yet. If this browser forgets you, your warden is lost.', ['Keep them', () => ctx.oath('words')]);
     const wyrmAlive = [...p.structs.values()].some((s) => s.typeId === 1 && !s.destroyed);
@@ -529,7 +505,7 @@ export function hold(ctx: Ctx): Screen {
 
   return {
     el, title: watching ? 'Watching a hold' : 'The Hold',
-    leave: () => { window.removeEventListener('resize', onResize); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
+    leave: () => { window.removeEventListener('resize', onResize); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); away.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
   };
 }
 

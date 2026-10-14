@@ -1,6 +1,6 @@
 /* Incantations (the proof-of-work engine's tasks) and the Chronicle (the transaction queue),
  * told in the realm's words. Both are live views over the borrowed ledger modules. */
-import { h, clear } from '../core/dom';
+import { h, clear, keepFocus } from '../core/dom';
 import { pow, type PowTask } from '../pow/pow';
 import { txq, type TxJob } from '../wallet/queue';
 import { live } from '../chain/live';
@@ -55,14 +55,19 @@ const STATUS: Record<TxJob['status'], [string, string]> = {
   success: ['is done', '#7dffb0'], failed: ['failed', 'var(--ember)'], cancelled: ['was let go', 'var(--faint)'],
 };
 
-export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max = 30) {
+/** A line the Chronicle tells beside the warden's own rites (what others did to their hold). `sig` changes
+ * whenever its words or controls would. */
+export interface ChronicleLine { at: number; key: string; sig: string; el: () => HTMLElement }
+export interface ChronicleExtra { lines(): ChronicleLine[]; on(repaint: () => void): () => void }
+
+export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max = 30, extra?: ChronicleExtra) {
   const list = h('ol', { class: 'list chron scroll-y', style: { gap: '6px', maxHeight: '170px' } });
   const el = h('section', { class: 'glass panel', 'aria-label': 'Chronicle', style: { display: 'flex', flexDirection: 'column' } },
     h('h2', { class: 'display', style: { fontSize: '19px', marginBottom: '8px' } }, 'Chronicle'), list);
   let last: TxJob[] = [];
+  let sig = '';
   const paint = (jobs: TxJob[]) => {
     last = jobs;
-    clear(list);
     // the same rite done again and again reads as one line with a count; so does the same refusal,
     // however the rows between fell (eight taps on a full sky are one line, ×8, newest first)
     const sorted = jobs.filter(filter).slice().sort((a, b) => b.updatedAt - a.updatedAt);
@@ -77,23 +82,32 @@ export function chroniclePanel(filter: (j: TxJob) => boolean = () => true, max =
       if (shown.length >= max) break;
       shown.push(j);
     }
+    // the warden's rites and what was done to them, interleaved, newest first
+    const rows: ({ at: number; job: TxJob } | { at: number; line: ChronicleLine })[] = [...shown.map((j) => ({ at: j.updatedAt, job: j })), ...(extra ? extra.lines().map((l) => ({ at: l.at, line: l })) : [])];
+    rows.sort((a, b) => b.at - a.at);
+    if (rows.length > max) rows.length = max;
+    // repaint only when what it says changes, so a reader or a focused button is not reset
+    const now = rows.map((r) => ('job' in r ? `${r.job.id}|${r.job.status}|${times.get(r.job) || 0}|${r.job.waitReason || ''}|${r.job.error || ''}|${canRetry(r.job)}|${agoMs(r.at)}` : `${r.line.sig}|${agoMs(r.at)}`)).join('\n');
+    if (now === sig && list.childElementCount) return;
+    sig = now;
     // Like the chants: an empty chronicle waits out of sight until there is something to tell.
-    el.hidden = !shown.length;
-    if (!shown.length) return;
-    for (const j of shown) {
-      const [word, color] = STATUS[j.status];
-      list.append(h('li', null,
-        h('span', { class: 'when', title: (j.height ? `Bell ${j.height} · ` : '') + new Date(j.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, agoMs(j.updatedAt)),
-        h('span', null, h('span', null, retell(j.label).replace(/ · chant of \d+$/, '')), ' ', h('span', { style: { color } }, word), times.get(j) ? h('span', { class: 'herald-n', style: { marginLeft: '6px' } }, `×${times.get(j)}`) : null,
-          j.status === 'waiting' && j.waitReason ? h('span', { class: 'faint' }, ` — ${retellError(j.waitReason)}`) : null,
-          j.status === 'failed' && j.error ? h('span', { style: { color: 'var(--ember-ink)' } }, ` — ${retellError(j.error)}`) : null,
-          // a stale refusal is only told: sent again blind, it could ride a new Wyrm to a plundered isle
-          j.status === 'failed' && canRetry(j) ? [' ', h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: '6px', minHeight: '28px' }, 'aria-label': `Again: ${retell(j.label).replace(/ · chant of \d+$/, '')}`, onclick: () => { if (canRetry(j)) txq.retry(j.id); else paint(last); } }, 'Again')] : null)));
-    }
+    el.hidden = !rows.length;
+    keepFocus(list, () => { clear(list); for (const r of rows) list.append('job' in r ? jobRow(r.job, times.get(r.job)) : r.line.el()); });
+  };
+  const jobRow = (j: TxJob, n?: number) => {
+    const [word, color] = STATUS[j.status];
+    return h('li', null,
+      h('span', { class: 'when', title: (j.height ? `Bell ${j.height} · ` : '') + new Date(j.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, agoMs(j.updatedAt)),
+      h('span', null, h('span', null, retell(j.label).replace(/ · chant of \d+$/, '')), ' ', h('span', { style: { color } }, word), n ? h('span', { class: 'herald-n', style: { marginLeft: '6px' } }, `×${n}`) : null,
+        j.status === 'waiting' && j.waitReason ? h('span', { class: 'faint' }, ` — ${retellError(j.waitReason)}`) : null,
+        j.status === 'failed' && j.error ? h('span', { style: { color: 'var(--ember-ink)' } }, ` — ${retellError(j.error)}`) : null,
+        // a stale refusal is only told: sent again blind, it could ride a new Wyrm to a plundered isle
+        j.status === 'failed' && canRetry(j) ? [' ', h('button', { type: 'button', class: 'btn small ghost', style: { marginLeft: '6px', minHeight: '28px' }, 'aria-label': `Again: ${retell(j.label).replace(/ · chant of \d+$/, '')}`, onclick: () => { if (canRetry(j)) txq.retry(j.id); else paint(last); } }, 'Again')] : null));
   };
   const off = txq.onChange(paint);
+  const offExtra = extra?.on(() => paint(last));
   // "just now" ages: refresh the times twice a minute
   const tick = setInterval(() => paint(last), 30_000);
   // repaint: the filter's answer changed without the queue changing (whose rites these are)
-  return { el, repaint: () => paint(last), dispose: () => { off(); clearInterval(tick); } };
+  return { el, repaint: () => paint(last), dispose: () => { off(); offExtra?.(); clearInterval(tick); } };
 }
