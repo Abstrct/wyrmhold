@@ -115,7 +115,8 @@ export default async function (t, ctx) {
       if (route.startsWith('#/skirmish') && !s1.strike) bad.push(`${route}: the strike button vanished with the panels: a fight could not go on`);
       if (vp === PHONE_SIDE && route === '#/hold') { const share = await openShare(); if (share < 0.8) bad.push(`${route}: the world view leaves only ${Math.round(share * 100)}% of the screen to the sky`); await page.screenshot(c.evidencePath('hold-world-view-844.png')); }
       // remembered: leave the screen and come back
-      await page.eval(`location.hash = '#/grimoire'`); await sleep(600); await page.eval(`location.hash = ${JSON.stringify(route)}`); await sleep(1500);
+      await go(page, '#/grimoire'); await go(page, route);
+      await page.waitFor(`!!document.querySelector('.world-btn')`, { what: 'the toggle to return with the screen', timeout: 60000 }); await sleep(800);
       const s2 = await state();
       if (!s2.on || s2.pressed !== 'true') bad.push(`${route}: the world view was not remembered on coming back`);
       // Escape brings the panels back
