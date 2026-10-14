@@ -105,6 +105,33 @@ export default async function (t, ctx) {
     }
   });
 
+  await t.test('the forecast says what can strike your Elder Wyrm while you stay, by realm reach, and how many blows would fell it (not only this blow’s answer)', 'S1', async () => {
+    // Maya's raid (2026-10-13): "Hits back: none" for her blow, and nothing said that their beasts could strike her Wyrm
+    const wyrm = me.beasts[0], theirWyrm = foe.beasts[0];
+    const read = () => page.eval(`({ chips: Object.fromEntries([...document.querySelectorAll('.fc-chip')].map((c) => [c.querySelector('.k').textContent, [c.querySelector('.v').textContent, c.querySelector('.s') ? c.querySelector('.s').textContent : '']])), line: [...document.querySelectorAll('.fc-exposed')].map((e) => e.textContent).join(' ') })`);
+    await page.eval(`document.querySelector('[data-key="ours:${wyrm.Struct.id}"]').click()`); await sleep(250);
+    await page.eval(`document.querySelector('[data-key="theirs:${theirWyrm.Struct.id}"]').click()`); await sleep(500);
+    let r = await read();
+    expect.ok(/this blow only/.test((r.chips['Hits back'] || [])[1] || ''), '"Hits back" says it is this blow’s answer only', r.chips);
+    // in Starfall only their Elder Wyrm reaches yours, two hearts a blow: three blows fell its six
+    expect.eq((r.chips['Their blows'] || [])[0], '3 to fell', 'their blows to fell your Wyrm', r.chips);
+    expect.ok(/their Elder Wyrm can reach your Elder Wyrm: three blows would fell it/.test(r.line), 'the line names what reaches it and the blows that fell it', r.line);
+    // in the Wilds three of theirs reach it, and your Stone Troll (one heart, stone-skin) takes their first blow
+    const was = wyrm.Struct.operatingAmbit;
+    try {
+      wyrm.Struct.operatingAmbit = 'land';
+      ctx.ledger.emitTx([{ type: 'EventStruct', key: 'structure', data: { id: wyrm.Struct.id, owner: me.pid, locationId: me.fleetId } }]);
+      await page.waitFor(`/takes their blows first/.test([...document.querySelectorAll('.fc-exposed')].map((e) => e.textContent).join(' '))`, { what: 'the line for a Wyrm in the Wilds', timeout: 20000 });
+      r = await read();
+      for (const n of ['Stone Troll', 'Kraken', 'Shade Owl']) expect.includes(r.line, n, `${n} is named as reaching your Wyrm in the Wilds`);
+      expect.ok(/Your Stone Troll takes their blows first: four blows in all would fell your Wyrm/.test(r.line), 'the guard is counted: one blow fells it, three more your Wyrm', r.line);
+    } finally {
+      wyrm.Struct.operatingAmbit = was;
+      ctx.ledger.emitTx([{ type: 'EventStruct', key: 'structure', data: { id: wyrm.Struct.id, owner: me.pid, locationId: me.fleetId } }]);
+    }
+    await page.waitFor(`!/takes their blows first/.test([...document.querySelectorAll('.fc-exposed')].map((e) => e.textContent).join(' '))`, { what: 'the Wyrm back in Starfall', timeout: 20000 });
+  });
+
   await t.test('the camera views (Ours, Both, Theirs) move the eye and keep it finite', 'S1', async () => {
     for (const v of ['Ours', 'Theirs', 'Both']) {
       await page.clickSel('[aria-label="Camera view"] button', { text: v });
@@ -196,6 +223,49 @@ export default async function (t, ctx) {
       while ((ctx.ledger.broadcasts || 0) === before && Date.now() - t0 < 25000) await sleep(300);
       expect.ok((ctx.ledger.broadcasts || 0) > before, 'the second press strikes');
     } finally { wyrm.structAttributes.health = was; rideHome(); }
+  });
+
+  await t.test('a deadly blow ignores a double press, keeps asking while the pointer is on it, and strikes only on a deliberate second press; the danger comes with a way home', 'S1', async (c) => {
+    // Leo (2026-10-13): the question timed out while he hesitated, then a double-tap went straight through it
+    const wyrm = me.beasts[0], theirWyrm = foe.beasts[0];
+    const was = wyrm.structAttributes.health;
+    rideOut();
+    try {
+      wyrm.structAttributes.health = '2';
+      w.players.get(me.pid).gridAttributes.lastAction = String(w.height - 20);
+      ctx.ledger.emitTx([{ type: 'EventPlayer', key: 'player', data: { id: me.pid } }]);
+      await page.waitFor(`/Fell Grimwald/.test(document.querySelector('.wb-title')?.textContent || '') && !/Striking|Gathering/.test(document.querySelector('.btn.unleash').innerText)`, { what: 'in orbit, nothing in flight', timeout: 30000 });
+      await page.waitFor(`document.querySelector('[data-key="ours:${wyrm.Struct.id}"] .hearts')?.getAttribute('aria-label') === 'vigor 2 of 6'`, { what: 'the Wyrm at two hearts', timeout: 20000 });
+      await page.eval(`document.querySelector('[data-key="ours:${wyrm.Struct.id}"]').click()`); await sleep(250);
+      await page.eval(`document.querySelector('[data-key="theirs:${theirWyrm.Struct.id}"]').click()`); await sleep(600);
+      // their Wyrm answers for 2 and can strike yours: it could fall before your next blow, and the way home is offered
+      const danger = await page.eval(`document.querySelector('.fc-danger') ? document.querySelector('.fc-danger').innerText : ''`);
+      expect.ok(/could fall before your next blow/.test(danger) && /Ride home/.test(danger), 'the danger is said plainly, with Ride home beside it', danger);
+      const at = await page.eval(`(() => { const b = document.querySelector('.btn.unleash').getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
+      const label = () => page.eval(`document.querySelector('.btn.unleash').innerText.replace(/\\s+/g, ' ')`);
+      const before = ctx.ledger.broadcasts || 0;
+      // a double-tap: the first press asks, the second (150 ms later by the taps' own clock, however busy the
+      // page is when it hears them) is ignored
+      await page.move(at[0], at[1]);
+      await page.eval(`window.__presses = []; document.querySelector('.btn.unleash').addEventListener('click', (e) => window.__presses.push(Math.round(e.timeStamp)), true)`);
+      const ts0 = Date.now() / 1000, tap = async (ts) => { for (const [type, dt] of [['mousePressed', 0], ['mouseReleased', 0.03]]) await page.send('Input.dispatchMouseEvent', { type, x: at[0], y: at[1], button: 'left', clickCount: 1, timestamp: ts + dt }); };
+      await tap(ts0); await tap(ts0 + 0.15);
+      await sleep(900);
+      let l = await label();
+      const why = async () => [l, await page.eval(`({ presses: window.__presses, note: document.querySelector('.strike-panel .inline-err') ? document.querySelector('.strike-panel .inline-err').textContent : '', hit: (() => { const e = document.elementFromPoint(${at[0]}, ${at[1]}); return e ? (e.closest('button') || e).className : null; })(), sent: ${ctx.ledger.broadcasts || 0} - ${before} })`)];
+      expect.ok(/Unleash anyway\?/.test(l) && /will fell your Elder Wyrm/.test(l), 'the double press only asks, and says what the blow will do', await why());
+      expect.eq(ctx.ledger.broadcasts || 0, before, 'a double press sends nothing');
+      // past the old five seconds, with the pointer still on it, the question stands
+      await sleep(5600);
+      l = await label();
+      expect.ok(/Unleash anyway\?/.test(l), 'the question stands while the pointer is on the button', l);
+      expect.eq(ctx.ledger.broadcasts || 0, before, 'nothing sent while it waits');
+      // a deliberate second press strikes
+      await page.click(at[0], at[1]);
+      const t0 = Date.now();
+      while ((ctx.ledger.broadcasts || 0) === before && Date.now() - t0 < 25000) await sleep(300);
+      expect.ok((ctx.ledger.broadcasts || 0) > before, 'the deliberate second press strikes');
+    } finally { wyrm.structAttributes.health = was; await page.move(5, 5); rideHome(); }
   });
 
   await t.test('the fray tells a blow the ledger reports, in the realm’s words, and words rise in the sky', 'S1', async (c) => {

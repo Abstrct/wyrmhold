@@ -61,6 +61,7 @@ export function laws(): [string, string][] {
     ['Answer', `A struck beast that lives strikes back, if it is awake and can reach its striker’s realm. The Siege Treant is the exception both ways: nothing answers its blows, and it never answers. The Siren answers ${sr.counterAttackSameAmbit} in its own waters.`],
     ['Guard', 'A guard strikes back at whoever strikes its ward, if it can reach them, and takes the blow itself when it stands in the ward’s own realm. Fell the guard first.'],
     ['The Elder Wyrm', 'It strikes only in its own realm and must soar to reach another. Every raid rides on it: if a raider’s Wyrm falls, the raid breaks and the warband flees home.'],
+    ['Wounds', 'Wounds never mend: no rite heals a beast, and every heart it loses stays lost. A fallen beast can be summoned anew at full hearts, and a fallen Elder Wyrm hatches anew. While your warband hangs over their isle, their beasts that reach yours can strike it, not only answer your blows: the Skirmish counts how many blows would fell your Wyrm.'],
     ['Plunder', 'Takes unbrewed wildroot, never alpha, never a soulstone. Fell the raider’s Elder Wyrm and the plunder breaks.'],
   ];
 }

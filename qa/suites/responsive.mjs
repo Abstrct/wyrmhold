@@ -76,6 +76,42 @@ export default async function (t, ctx) {
     ctx.report.note('roster rows by device: ' + rows.join(' · '));
     expect.eq(bad.length, 0, 'devices where the roster shows (almost) nothing', bad);
   });
+  await t.test('Ysolde never covers the control she points at (phone, phone sideways, tablet), at rest and after "Show me"', 'S1', async (c) => {
+    // the 2026-10-13 playtests: her card or pill sat over Summon, the Atlas list, Guard and Tithe right after "Show me"
+    const { w, guilds } = ctx.sky;
+    const nw = ctx.worldLib.addWarden(w, { name: 'Lantern', guildId: guilds.hearth.id, beasts: [[1]], planetOre: 5 });
+    w.anyAddressPlayer = nw.pid;
+    const bad = [], seen = [];
+    const measure = (when, dev) => page.eval(`(() => {
+      const t = [...document.querySelectorAll('[data-tut="summon"]')].find((e) => e.getBoundingClientRect().width), p = document.querySelector('.path');
+      if (!t || !p) return { missing: !t ? 'Summon' : 'Ysolde' };
+      const a = t.getBoundingClientRect(), b = p.getBoundingClientRect(), on = a.bottom > 0 && a.top < innerHeight;
+      return { on, hit: on && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top, folded: p.classList.contains('min'),
+        target: [a.left, a.top, a.right, a.bottom].map(Math.round), ysolde: [b.left, b.top, b.right, b.bottom].map(Math.round) };
+    })()`).then((r) => { seen.push(`${dev} ${when}: ${JSON.stringify(r)}`); if (r.missing) bad.push(`${dev} ${when}: no ${r.missing}`); else if (r.hit) bad.push(`${dev} ${when}: Ysolde ${r.ysolde} covers Summon ${r.target}`); return r; });
+    try {
+      for (const [dev, vp] of [['phone 390×844', { width: 390, height: 844, mobile: true }], ['phone landscape 844×390', { width: 844, height: 390, mobile: true }], ['tablet 1180×820', { width: 1180, height: 820, mobile: true }]]) {
+        const storage = { 'wyrmhold.prologue': 'seen', 'wyrmhold.tour.hold': 'seen', 'wyrmhold.music': 'off', 'wyrmhold.path.hidden': '0', ['wyrmhold.path.' + nw.pid]: JSON.stringify({ wyrm: true }) };
+        await openGame(page, ctx.app.url, '#/hold', { storage, sworn: true, playerId: nw.pid, viewport: vp });
+        await awake(page);
+        await page.waitFor(`document.querySelector('[data-tut="summon"]') && document.querySelector('.path .path-pill, .path .path-say')`, { what: 'Summon and Ysolde', timeout: 30000 });
+        await sleep(1500);
+        await measure('at rest', dev);
+        // open her if she waits as a pill, then "Show me"
+        if (await page.eval(`document.querySelector('.path').classList.contains('min')`)) { await page.eval(`document.querySelector('.path-pill').click()`); await sleep(700); }
+        await page.eval(`[...document.querySelectorAll('.path button')].find((b) => /Show me/.test(b.textContent)).click()`);
+        // she points (focus on Summon), the page scrolls it into view, and she steps aside if she would cover it
+        await page.waitFor(`document.activeElement && document.activeElement.dataset.tut === 'summon'`, { what: '"Show me" to reach Summon', timeout: 20000 }).catch(() => null);
+        await page.waitFor(`(() => { const r = document.activeElement.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`, { what: 'Summon in view', timeout: 10000 }).catch(() => null);
+        await sleep(1500);
+        const r = await measure('after Show me', dev);
+        if (!r.missing && !r.on) bad.push(`${dev}: Summon is not brought into view`);
+        await page.screenshot(c.evidencePath(`ysolde-${vp.width}x${vp.height}.png`));
+      }
+    } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
+    ctx.report.note('Ysolde and her target: ' + seen.join(' · '));
+    expect.eq(bad.length, 0, 'Ysolde over the control she points at', bad);
+  });
   await t.test('resizing a live screen (desktop → phone → desktop) keeps the sky and panels sound', 'S1', async () => {
     await openGame(page, ctx.app.url, '#/hold', { sworn: true, playerId: ctx.sky.me.pid, viewport: { width: 1280, height: 800 } });
     await awake(page); await sleep(800);

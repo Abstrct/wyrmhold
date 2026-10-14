@@ -23,7 +23,7 @@ import { pow } from '../pow/pow';
 import { typeOf, type Ambit } from '../data/catalogue';
 import { REALM_COLOR, REALM_NAME, WARD_CRAFT, beastName, bellsAsTime, retellError } from '../lore';
 import { playerName, raidersAt, realmOf, skyFull } from '../realm';
-import { alive, forecast, guardsOf, inRealm, isWyrm, moves, pct, reach, readBlow, tellBlow, wardKeeper, wisest, wyrmOf, type Blow, type Forecast, type Move } from '../game/war';
+import { LONG_ASLEEP, NO_MENDING, alive, blowsWord, exposure, forecast, guardsOf, inRealm, isWyrm, kinds, moves, pct, reach, readBlow, tellBlow, wardKeeper, wisest, wyrmOf, type Blow, type Exposure, type Forecast, type Move } from '../game/war';
 
 type Side = 'ours' | 'theirs';
 interface Told { blow: Blow; at: number; ours: boolean; fresh: boolean }
@@ -40,7 +40,7 @@ export function skirmish(ctx: Ctx): Screen {
   const sBtnLabel = h('span', { class: 'ub-l' }, 'Unleash');
   const sBtnSub = h('span', { class: 'ub-s' });
   const sBtnFill = h('span', { class: 'ub-fill', 'aria-hidden': 'true' });
-  const sBtn = h('button', { type: 'button', class: 'btn ember unleash', 'data-tut': 'unleash', onclick: () => press() }, sBtnFill, sBtnLabel, sBtnSub);
+  const sBtn = h('button', { type: 'button', class: 'btn ember unleash', 'data-tut': 'unleash', onclick: (e: Event) => { pressAt = e.timeStamp || performance.now(); press(); } }, sBtnFill, sBtnLabel, sBtnSub);
   const sPending = h('div', { class: 'fc-pending', role: 'status', 'aria-live': 'polite' });
   const sNote = h('div');
   const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Camera view' });
@@ -207,7 +207,7 @@ export function skirmish(ctx: Ctx): Screen {
       const w = wyrmOf(p), g = w && alive(w) && !unguardedOk ? guardFor(p, w) : null;
       if (g && w && !guarding) { guardWyrm(g, w); return; }
       // a Wyrm on its last hearts rides only on a second, deliberate press: a raid rides on it
-      if (w && alive(w) && w.health <= 2 && menaced(w) && armed?.key !== 'ride') { armed = { key: 'ride', until: Date.now() + 5000 }; window.setTimeout(() => { if (armed?.key === 'ride') { armed = null; paintButton(); } }, 5000); paintButton(); return; }
+      if (w && alive(w) && w.health <= 2 && menaced(w) && !confirmed('ride')) return;
       armed = null;
       rideOut(); return;
     }
@@ -246,10 +246,9 @@ export function skirmish(ctx: Ctx): Screen {
     if (!a.online) { say(`Your ${beastName(a.typeId)} slumbers: wake it at your Hold to strike with it.`); return; }
     const r = reach(a, t);
     if (!r.weapon) { if (r.soar) soar(a, r.soar); else say(retellError(r.why)); return; }
-    // a blow the answer would surely fell your Wyrm for is struck only on a second, deliberate press
+    // a blow whose answer would likely fell your Wyrm is struck only on a second, deliberate press
     const fc = forecast(a, t, r.weapon, f);
-    const key = `${a.id}>${t.id}`;
-    if (fc && isWyrm(a) && fc.lost >= 0.995 && !fightOn && armed?.key !== key) { armed = { key, until: Date.now() + 5000 }; window.setTimeout(() => { if (armed?.key === key) { armed = null; paintButton(); } }, 5000); paintButton(); return; }
+    if (fc && isWyrm(a) && fc.lost >= 0.5 && !fightOn && !confirmed(`${a.id}>${t.id}`)) return;
     armed = null;
     strikeNote = '';
     try {
@@ -282,8 +281,38 @@ export function skirmish(ctx: Ctx): Screen {
     try { act.move(p, a, 'fleet', to, 0); toast(`Your Elder Wyrm soars into ${inRealm(to)}.`, 'player', 3500); } catch (e) { say(retellError((e as Error).message)); }
   }
   let strikeNote = '', lastAM = '';
-  /** A deadly blow pressed once: the next press within a few seconds strikes it. */
-  let armed: { key: string; until: number } | null = null;
+  /** A deadly blow (or ride) pressed once: it waits for a second, deliberate press. */
+  let armed: { key: string; at: number } | null = null, armTimer = 0, pressAt = 0;
+  /** A second press this soon after the first is the same tap twice (a double-tap, a held key), not a choice. */
+  const ARM_GAP = 600;
+  /** True when this press confirms the deadly `key`; otherwise it arms it (or is ignored as too quick) and
+   * the button asks again. The question stays while the pointer or the focus is on the button, and goes
+   * a few seconds after both have left. */
+  function confirmed(key: string): boolean {
+    // when the press happened, not when it was heard: a busy page can hear a double-tap's two taps far apart
+    const at = pressAt || performance.now();
+    if (armed?.key === key) {
+      const quick = at - armed.at < ARM_GAP;
+      // a double-tap's second tap, or a held key's repeats: ignored, and each one restarts the wait
+      armed.at = at;
+      return !quick;
+    }
+    armed = { key, at };
+    clearTimeout(armTimer);
+    const check = () => {
+      if (!armed || armed.key !== key || left) return;
+      if (sBtn.matches(':hover') || document.activeElement === sBtn) { armTimer = window.setTimeout(check, 1000); return; }
+      armed = null; paintButton();
+    };
+    armTimer = window.setTimeout(check, 5000);
+    paintButton();
+    // said once, out loud, without a new line under the button: a button that moved would catch a double-tap's
+    // second tap on whatever slid under it, and lose the pointer that keeps the question standing
+    sAlert.textContent = armWarn;
+    return false;
+  }
+  /** What the armed button will do, in a sentence (set when the button is painted armed). */
+  let armWarn = '';
   let fightOn = false, fightNote = '', autoBusy = false, unheard: string | null = null;
   /** The blow Fight on would strike: the wisest that never risks the Elder Wyrm, and never one that could fell the striker outright. */
   function autoMove(list: Move[]): Move | null { return wisest(list, (m) => (isWyrm(m.a) ? m.f.lost === 0 : m.f.lost < 0.5)); }
@@ -419,10 +448,10 @@ export function skirmish(ctx: Ctx): Screen {
       else proclaim('Their Elder Wyrm falls!', `${foeName()}’s ward is broken. Hold their sky: your chant now plunders their wildroot.`, 'gold');
     } else if (myWyrm && felled.has(myWyrm)) {
       audio.stinger('vulnerable', 1);
-      proclaim('Your Elder Wyrm has fallen', defending() ? 'Your isle lies open to their chant.' : 'The raid is broken. Your warband limps home to mend.', 'ember');
+      proclaim('Your Elder Wyrm has fallen', defending() ? 'Your isle lies open to their chant.' : 'The raid is broken, and your warband limps home. A fallen Wyrm hatches anew at full hearts.', 'ember');
     } else if (!ours && myWyrm && bw.shots.some((s) => s.targetId === myWyrm && !s.evaded && !s.blockerId && s.damage)) {
       const w = p?.structs.get(myWyrm), left = bw.shots.find((s) => s.targetId === myWyrm)?.targetHpAfter ?? w?.health ?? 0;
-      if (left <= 2) toast(`Your Elder Wyrm is down to ${left} ${left === 1 ? 'heart' : 'hearts'}. If it falls, ${oursAbroad() ? 'the raid breaks' : 'your isle lies open'}.`, 'enemy', 6000);
+      if (left <= 2) toast(`Your Elder Wyrm is down to ${left} ${left === 1 ? 'heart' : 'hearts'}, and wounds never mend. If it falls, ${oursAbroad() ? 'the raid breaks' : 'your isle lies open'}.`, 'enemy', 6000);
     }
     // a struck beast's hearts change on the ledger: read both wardens now, not at the next sweep
     if (p) void empire.refresh(p.playerId);
@@ -491,7 +520,9 @@ export function skirmish(ctx: Ctx): Screen {
   function paintWarbar(p: PlayerState | null, f: PlayerState | null) {
     const lines: { step?: number; title: string; line: string; tone: 'gold' | 'ember' | 'calm'; act?: [string, () => void, boolean?]; wyrm?: OwnedStruct | null; guards?: OwnedStruct[]; plunder?: number | null; warn?: string }[] = [];
     const myW = wyrmOf(p);
-    const lowWyrm = myW && alive(myW) && myW.health <= Math.ceil(myW.type!.maxHealth / 3) && inFight() ? `Your Elder Wyrm has ${myW.health} of ${myW.type!.maxHealth} hearts. If it falls, ${defending() ? 'your isle lies open' : 'the raid breaks'}.` : undefined;
+    const lowWyrm = myW && alive(myW) && myW.health <= Math.ceil(myW.type!.maxHealth / 3) && inFight() ? `Your Elder Wyrm has ${myW.health} of ${myW.type!.maxHealth} hearts. If it falls, ${defending() ? 'your isle lies open' : 'the raid breaks'}. ${NO_MENDING}` : undefined;
+    // a wounded Wyrm at home: no rite heals it, and the warden should know before riding on it
+    const wounded = myW && alive(myW) && myW.health < myW.type!.maxHealth && !inFight() ? `Your Elder Wyrm has ${myW.health} of ${myW.type!.maxHealth} hearts. ${NO_MENDING}` : undefined;
     if (!p) {
       if (!wallet.active?.playerId) lines.push({ title: 'You have no warband yet', line: 'Swear the oath: your Elder Wyrm hatches, and your warband with it.', tone: 'calm', act: ['Swear the oath', ctx.oath, true] });
       else {
@@ -516,7 +547,7 @@ export function skirmish(ctx: Ctx): Screen {
     } else if (!oursAbroad()) {
       const keeper = wardKeeper(f), tw = wyrmOf(f);
       const loot = f.ore > 0 ? `their ${f.ore} ${f.ore === 1 ? 'sheaf' : 'sheaves'} of wildroot` : 'whatever wildroot they leave unbrewed';
-      lines.push({ step: 1, title: `Raid ${foeName()}’s hold`, line: keeper ? `Ride out, fell their Elder Wyrm, and your chant carries off ${loot}. While you are away, your own hold stands unguarded.` : `Their Elder Wyrm ${tw && alive(tw) ? 'is away' : 'has fallen'}: their ward is open. Ride out and your chant carries off ${loot}.`, tone: 'gold', wyrm: keeper ? tw : null, guards: keeper && tw ? guardsOf(tw, f) : [] });
+      lines.push({ step: 1, title: `Raid ${foeName()}’s hold`, line: keeper ? `Ride out, fell their Elder Wyrm, and your chant carries off ${loot}. While you are away, your own hold stands unguarded.` : `Their Elder Wyrm ${tw && alive(tw) ? 'is away' : 'has fallen'}: their ward is open. Ride out and your chant carries off ${loot}.`, tone: 'gold', wyrm: keeper ? tw : null, guards: keeper && tw ? guardsOf(tw, f) : [], warn: wounded });
     } else {
       const keeper = wardKeeper(f), tw = wyrmOf(f);
       const task = pow.active.find((x) => x.kind === 'raid' && x.playerId === p.playerId);
@@ -557,7 +588,7 @@ export function skirmish(ctx: Ctx): Screen {
           wg ? h('p', { class: 'wb-guardme' }, glyph('ward', 14), h('span', null, 'Your Elder Wyrm stands unguarded.'),
             h('button', { type: 'button', class: 'btn small', disabled: guarding, onclick: () => guardWyrm(wg, myW!) }, guarding ? 'Setting the guard…' : `Guard it with your ${beastName(wg.typeId)}`, h('span', { class: 'cost' }, `${wg.type!.defendChangeCharge} breath`)),
             !inFight() && !unguardedOk ? h('button', { type: 'button', class: 'btn small ghost', onclick: () => { unguardedOk = true; sigs.warbar = ''; rideOut(); } }, 'Ride out unguarded') : null) : null),
-        L.act ? h('button', { type: 'button', class: L.act[2] ? 'btn gold' : 'btn small', onclick: L.act[1] }, L.act[0]) : null)));
+        L.act ? h('button', { type: 'button', class: L.act[2] ? 'btn gold' : 'btn small', 'data-tut': L.act[0] === 'Ride home' ? 'home' : null, onclick: L.act[1] }, L.act[0]) : null)));
   }
 
   let plunderBar: HTMLElement | null = null, plunderPct: HTMLElement | null = null;
@@ -672,13 +703,45 @@ export function skirmish(ctx: Ctx): Screen {
       h('span', null, '♥'.repeat(keep)), h('span', { class: 'lose' }, '♥'.repeat(going)), h('span', { class: 'gone' }, '♡'.repeat(Math.max(0, max - hp))));
   }
 
+  /** Who of theirs can strike `ex.on` while the warbands share a sky, in a sentence. `first`: what this blow's answer takes first. */
+  function exposedLine(ex: Exposure, first: number, asleep: boolean): string {
+    const f = foe();
+    const mine = isWyrm(ex.on) ? 'your Elder Wyrm' : `your ${beastName(ex.on.typeId)}`;
+    if (!inFight() && f?.fleet?.status === 'away') return `Their warband is abroad: nothing of theirs at home can strike ${mine}.`;
+    const where = defending() ? 'While their warband hangs over your isle' : oursAbroad() ? 'While you hang here' : 'Once you hang over their isle';
+    if (!ex.by.length) return `${where}, nothing of theirs can reach ${mine} in ${inRealm(ex.on.ambit)}.`;
+    let s = `${where}, their ${kinds(ex.by.map((b) => b.s))} can reach ${mine}`;
+    const after = first ? 'after this blow’s answer, ' : '';
+    if (ex.blows === Infinity) s += ex.guard ? `, but your ${beastName(ex.guard.typeId)} takes every blow.` : ', but cannot hurt it.';
+    else if (ex.guard) s += `. Your ${beastName(ex.guard.typeId)} takes their blows first: ${after}${blowsWord(ex.blows)} in all would fell ${isWyrm(ex.on) ? 'your Wyrm' : 'it'}.`;
+    else if (!ex.blows) s += ': this blow’s answer alone would fell it.';
+    else s += `: ${after}${blowsWord(ex.blows)} would fell it.`;
+    if (asleep && !defending()) s += ` ${foeName()} has long slept, though: unlikely to strike.`;
+    return s;
+  }
+  /** The danger, said once to a screen reader each time it begins (or the Wyrm loses hearts while it lasts). */
+  let dangerSaid = '';
+  const sAlert = h('p', { role: 'status', 'aria-live': 'polite', style: { position: 'absolute', width: '1px', height: '1px', margin: '-1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } });
+  strike.append(sAlert);
+
   /** The chosen blow, told before it is struck. */
   function paintStrike(p: PlayerState | null, a?: OwnedStruct, t?: OwnedStruct, r?: ReturnType<typeof reach> | null, fc?: Forecast | null, list: Move[] = []) {
     // a won raid is told by the war bar; the strike waits until the warband rides again
     strike.hidden = !targetPid || !p || !!(won && won.pid === targetPid);
     const best = suggestion(list);
     const isBest = !!(best && a && t && best.a.id === a.id && best.t.id === t.id);
-    const sig = JSON.stringify([!!p, targetPid, a?.id, a?.health, a?.ambit, a?.online, t?.id, t?.health, t?.hidden, r?.why, fc && [fc.land, fc.dmg, fc.fell, fc.fellMark, fc.backMax, fc.lost, fc.guard?.id, fc.guard?.health, fc.verdict.text], isBest, inFight(), view, strikeNote, won?.pid]);
+    // what of theirs can strike your Elder Wyrm (and the striker) while you hang over their isle, by realm reach
+    const f = foe(), myW = wyrmOf(p), foes = theirBeasts(f);
+    const answer = a && fc && isWyrm(a) && inFight() ? fc.backMax : 0;
+    const exW = p && f && myW && alive(myW) ? exposure(myW, foes, p, answer) : null;
+    const exA = p && f && a && !isWyrm(a) && alive(a) ? exposure(a, foes, p) : null;
+    const asleep = !!f?.lastAction && live.height - f.lastAction > LONG_ASLEEP;
+    // their next round (and this blow's answer) could fell it: say so where the warden is looking
+    const danger = !!exW && exW.falls && inFight() && !(asleep && !defending());
+    const g = danger && myW ? guardFor(p!, myW) : null;
+    const exSig = (ex: Exposure | null) => ex && [ex.on.id, ex.on.health, ex.on.ambit, ex.blows, ex.falls, ex.guard?.id, ex.by.map((b) => b.s.id + ':' + b.dmg)];
+    const sig = JSON.stringify([!!p, targetPid, a?.id, a?.health, a?.ambit, a?.online, t?.id, t?.health, t?.hidden, r?.why, fc && [fc.land, fc.dmg, fc.fell, fc.fellMark, fc.backMax, fc.lost, fc.guard?.id, fc.guard?.health, fc.verdict.text], isBest, inFight(), view, strikeNote, won?.pid,
+      exSig(exW), exSig(exA), asleep, f?.fleet?.status, danger, g?.id, guarding, oursAbroad()]);
     if (!changed('strike', sig)) return;
     clear(sHead); clear(sBody); clear(sNote);
     const name = (s: OwnedStruct, mine: boolean) => `${mine ? 'Your' : `${foeName()}’s`} ${beastName(s.typeId)}`;
@@ -688,16 +751,23 @@ export function skirmish(ctx: Ctx): Screen {
         h('span', { class: 'fc-arrow', 'aria-hidden': 'true' }, icon(ICON.arrow, 16)),
         h('span', { class: 'fc-t' }, t ? name(t, false) : 'choose a mark'),
         isBest ? h('span', { class: 'badge best' }, 'wisest blow') : best && a && t ? h('button', { type: 'button', class: 'btn small ghost fc-best', onclick: () => { atk = best.a.id; mark = best.t.id; chose = false; paint(); } }, 'Suggest a blow') : null));
+    const exTone = (ex: Exposure) => (ex.falls ? 'bad' : ex.by.length && ex.blows !== Infinity && !asleep ? 'warn' : 'good');
     if (a && t && fc) {
       const on = fc.hitsOn, guarded = on.id !== t.id;
-      const chip = (k: string, v: string, tone = '') => h('span', { class: 'fc-chip ' + tone }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v));
+      const chip = (k: string, v: string, tone = '', sub?: string) => h('span', { class: 'fc-chip ' + tone }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v), sub ? h('span', { class: 's' }, sub) : null);
+      // "Hits back" is this blow's answer; "Their blows" is what can strike your Wyrm while you stay
+      const theirBlows = exW ? (!inFight() && f?.fleet?.status === 'away' ? chip('Their blows', 'none home', 'good', 'their warband is abroad')
+        : !exW.by.length ? chip('Their blows', 'none reach', 'good', 'your Elder Wyrm')
+        : exW.blows === Infinity ? chip('Their blows', 'all held', 'good', `by your ${beastName(exW.guard?.typeId || 0)}`)
+        : chip('Their blows', `${exW.blows} to fell`, exTone(exW), asleep ? 'your Wyrm · they sleep' : 'your Elder Wyrm')) : null;
       sBody.append(
         h('div', { class: 'fc-chips' },
           chip('Lands', fc.land >= 0.995 ? 'always' : `${pct(fc.land)}`, fc.land < 0.5 ? 'bad' : ''),
           chip(guarded ? `Hits their ${beastName(on.typeId)}` : 'Deals', fc.dmg.max === fc.dmg.min ? `${fc.dmg.max}` : `${fc.dmg.min}–${fc.dmg.max}`, guarded ? 'guard' : ''),
           fc.fell > 0 ? chip(guarded ? 'Fells the guard' : 'Fells it', fc.fell >= 0.995 ? 'yes' : pct(fc.fell), 'good')
             : chip('Leaves it at', `${Math.max(1, on.health - fc.dmg.max)} ♥`),
-          chip('Hits back', fc.backMax ? `up to ${fc.backMax}` : 'none', fc.lost > 0 ? 'bad' : fc.backMax ? 'warn' : 'good'),
+          chip('Hits back', fc.backMax ? `up to ${fc.backMax}` : 'none', fc.lost > 0 ? 'bad' : fc.backMax ? 'warn' : 'good', 'this blow only'),
+          theirBlows,
           chip('Breath', String(fc.arm.charge))),
         h('div', { class: 'fc-hp' },
           h('span', { class: 'fc-hp-row' }, h('span', { class: 'k' }, `${guarded ? 'Their ' + beastName(on.typeId) + ' (guard)' : 'Their ' + beastName(on.typeId)}`), hpShift(on.health, fc.land > 0 ? fc.dmg.max : 0, on.type!.maxHealth, 'their beast')),
@@ -709,10 +779,30 @@ export function skirmish(ctx: Ctx): Screen {
         h('p', { class: 'fc-verdict ' + fc.verdict.tone }, fc.verdict.text));
     } else if (a && t && r && !r.weapon) {
       sBody.append(h('p', { class: 'fc-verdict fair' }, retellError(r.why)));
-      if (r.soar) sBody.append(h('p', { class: 'fc-why' }, `The big button soars it there (${a.type!.moveCharge} breath); then strike.`));
+      if (r.soar) {
+        sBody.append(h('p', { class: 'fc-why' }, `The big button soars it there (${a.type!.moveCharge} breath); then strike.`));
+        // where it soars to, other beasts of theirs may reach it: say so before it goes
+        const there = exposure({ ...a, ambit: r.soar }, foes, p);
+        sBody.append(h('p', { class: 'fc-exposed ' + exTone(there) }, there.by.length
+          ? `In ${inRealm(r.soar)}, their ${kinds(there.by.map((b) => b.s))} can reach it${there.blows === Infinity ? ', but cannot hurt it' : `: ${blowsWord(there.blows)} would fell it`}.`
+          : `In ${inRealm(r.soar)}, nothing of theirs can reach it.`));
+      }
     } else if (p && targetPid) {
       sBody.append(h('p', { class: 'fc-why' }, !ourBeasts(p).length ? 'No beasts ride with you yet.' : 'Choose a beast of yours, then one of theirs: the blow is told here before you strike.'));
     }
+    // what can strike your Wyrm while you stay, whatever blow is chosen; when it could fall before your next
+    // blow, that is said first and loudest, with the safe moves beside it
+    const alsoA = exA && exA.by.length && exA.blows !== Infinity ? ` Their ${kinds(exA.by.map((b) => b.s))} can reach your ${beastName(exA.on.typeId)} too: ${blowsWord(exA.blows)} would fell it.` : '';
+    if (danger && exW && myW) {
+      sBody.append(h('div', { class: 'fc-danger', role: 'group', 'aria-label': 'Your Elder Wyrm is in danger' },
+        h('p', null, h('b', null, 'Your Elder Wyrm could fall before your next blow. '),
+          `Their ${kinds(exW.by.map((b) => b.s))} can reach it ${defending() ? 'over your isle' : 'here'}, and ${answer ? 'this blow’s answer and ' : ''}one blow from each would fell it.`, alsoA),
+        h('div', { class: 'fc-danger-act' },
+          oursAbroad() ? h('button', { type: 'button', class: 'btn small gold', 'data-tut': 'home', onclick: () => rideHome() }, 'Ride home') : null,
+          g ? h('button', { type: 'button', class: 'btn small', disabled: guarding, onclick: () => guardWyrm(g, myW) }, guarding ? 'Setting the guard…' : `Guard your Wyrm with your ${beastName(g.typeId)}`, h('span', { class: 'cost' }, `${g.type!.defendChangeCharge} breath`)) : null)));
+    } else if (exW) sBody.append(h('p', { class: 'fc-exposed ' + exTone(exW) }, icon(ICON.warn, 14), h('span', null, exposedLine(exW, answer, asleep), alsoA)));
+    const say = danger && myW ? `${myW.id}:${myW.health}` : '';
+    if (say !== dangerSaid) { dangerSaid = say; sAlert.textContent = say ? `Your Elder Wyrm could fall before your next blow.${oursAbroad() ? ' Ride home and it lives to raid again.' : ''}` : ''; }
     if (strikeNote) sNote.append(h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, strikeNote)));
     // the camera
     clear(viewSeg);
@@ -735,7 +825,7 @@ export function skirmish(ctx: Ctx): Screen {
     else if (!inFight() && !guarding && skyFull(f.planet, p)) { label = 'Ride out'; why = skyFull(f.planet, p)!; }
     else if (!inFight() && guarding) { label = 'Setting the guard…'; sub = 'then ride out'; }
     else if (!inFight() && !unguardedOk && wyrmOf(p) && guardFor(p, wyrmOf(p)!)) { const g = guardFor(p, wyrmOf(p)!)!; label = 'Guard your Wyrm'; sub = `with your ${beastName(g.typeId)} · ${g.type!.defendChangeCharge} breath · then ride out`; disabled = false; }
-    else if (!inFight() && armed?.key === 'ride' && Date.now() < armed.until) { label = 'Ride out anyway?'; sub = `your Elder Wyrm has ${wyrmOf(p)!.health} ${wyrmOf(p)!.health === 1 ? 'heart' : 'hearts'} · press again to ride`; disabled = false; }
+    else if (!inFight() && armed?.key === 'ride') { label = 'Ride out anyway?'; sub = `your Elder Wyrm has ${wyrmOf(p)!.health} ${wyrmOf(p)!.health === 1 ? 'heart' : 'hearts'} · press again to ride`; disabled = false; armWarn = `Ride out anyway? Their beasts can reach your Elder Wyrm over their isle, and it has only ${wyrmOf(p)!.health} ${wyrmOf(p)!.health === 1 ? 'heart' : 'hearts'} left. ${NO_MENDING} Press again to ride.`; }
     else if (!inFight()) { label = p.fleet?.status === 'away' ? `Ride to ${foeName()}’s isle` : 'Ride out'; sub = (wyrmOf(p)?.health ?? 9) <= 2 ? `your Elder Wyrm has only ${wyrmOf(p)!.health} ${wyrmOf(p)!.health === 1 ? 'heart' : 'hearts'}` : 'you can only strike from their sky'; disabled = false; }
     else if (job) {
       const cost = job.chargeCost || 0;
@@ -757,7 +847,11 @@ export function skirmish(ctx: Ctx): Screen {
       const cost = r.weapon === 'primaryWeapon' ? a.type!.primaryWeaponCharge : a.type!.secondaryWeaponCharge;
       disabled = false; fill = Math.min(1, breath / Math.max(1, cost));
       sub = breath >= cost ? `${cost} breath · ready` : `${breath} of ${cost} breath · strikes when full (${bellsAsTime((cost - breath) * (live.blockTime / 6))})`;
-      if (armed && armed.key === `${a.id}>${t.id}` && Date.now() < armed.until) { label = 'Unleash anyway?'; sub = 'your Elder Wyrm would fall · press again to strike'; }
+      if (armed && armed.key === `${a.id}>${t.id}`) {
+        const fc = forecast(a, t, r.weapon, f), sure = !!fc && fc.lost >= 0.995;
+        label = 'Unleash anyway?'; sub = `This blow will ${sure ? '' : 'likely '}fell your Elder Wyrm · press again to strike`;
+        armWarn = `Unleash anyway? This blow will ${sure ? '' : 'likely '}fell your Elder Wyrm: ${fc ? `the answer strikes for up to ${fc.backMax}, and it has ${a.health} ${a.health === 1 ? 'heart' : 'hearts'}` : 'it cannot take the answer'}. If it falls, the raid breaks. Press again to strike anyway.`;
+      }
     }
     sBtnLabel.textContent = label; sBtnSub.textContent = sub;
     sBtn.dataset.tut = /^(Ride|Guard|Setting)/.test(label) ? 'ride' : 'unleash';
