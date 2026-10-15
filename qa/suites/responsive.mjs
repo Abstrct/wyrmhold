@@ -217,6 +217,10 @@ export default async function (t, ctx) {
 
   await t.test('touch: a drag on the panels scrolls them, never the camera; on an upright phone a swipe on the sky scrolls the page', 'S1', async () => {
     const bad = [];
+    // a WebDriver touch drag never pans a page natively in Firefox (not even a plain long one): there only the
+    // camera half of this check can be judged
+    const pans = page.kind !== 'firefox';
+    if (!pans) ctx.report.note('touch: Firefox cannot pan a page from a synthetic touch drag; only "the camera stays put" was checked');
     const strayed = () => page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().strayed`);
     const swipe = (x, y, dy) => page.send('Input.synthesizeScrollGesture', { x, y, xDistance: 0, yDistance: -dy, gestureSourceType: 'touch', speed: 900 }).then(() => sleep(800));
     // sideways: the panels' column, on a panel and on the gap between two of them
@@ -227,7 +231,7 @@ export default async function (t, ctx) {
       const p = await page.eval(probe), top0 = await page.eval(`document.querySelector('.hud').scrollTop`);
       await swipe(p.x, Math.min(p.y, 360), 160);
       const top1 = await page.eval(`document.querySelector('.hud').scrollTop`);
-      if (top1 < top0 + 40) bad.push(`844×390: a drag on ${where} did not scroll the panels (${top0} → ${top1})`);
+      if (pans && top1 < top0 + 40) bad.push(`844×390: a drag on ${where} did not scroll the panels (${top0} → ${top1})`);
       if (await strayed()) bad.push(`844×390: a drag on ${where} turned the camera`);
     }
     // upright: a vertical swipe on the window onto the sky scrolls the page rather than tipping the camera
@@ -236,7 +240,7 @@ export default async function (t, ctx) {
     const w = await page.eval(`(() => { const r = document.querySelector('.isle-window').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.7 }; })()`);
     await swipe(w.x, w.y, 200);
     const y = await page.eval(`window.scrollY || document.scrollingElement.scrollTop`);
-    if (y < 40) bad.push(`390×844: a swipe up on the sky did not scroll the page (scrollY ${y})`);
+    if (pans && y < 40) bad.push(`390×844: a swipe up on the sky did not scroll the page (scrollY ${y})`);
     if (await strayed()) bad.push('390×844: a swipe up on the sky tipped the camera');
     // and a sideways drag on the sky still turns the isle
     await page.eval(`window.scrollTo(0, 0)`); await sleep(400);

@@ -27,6 +27,30 @@ export default async function (t, ctx) {
   }
   ctx.report.note('draw census: ' + Object.entries(census).map(([k, v]) => `${k}: ${v.calls} calls, ${(v.triangles / 1000).toFixed(0)}k▲, ${v.programs} programs, ${v.textures} tex, ${v.geometries} geo, frame mean ${v.frame?.mean.toFixed(0)} ms p95 ${v.frame?.p95.toFixed(0)}`).join(' · '));
 
+  /* Frosted glass over a moving sky costs nothing on a GPU compositor and everything on a software one (Firefox
+   * headless, or on a blocklisted driver: 7 fps → 60 with the blur off). ui/smooth.ts judges the frames once a sky
+   * wakes; here a frame is made slow on purpose, by a wait in requestAnimationFrame, to see it judge both ways. */
+  const crawl = (onlyFrosted) => `const root = document.documentElement; root.classList.remove('clear-glass');
+    const raf = window.__rafPlain || (window.__rafPlain = window.requestAnimationFrame.bind(window));
+    window.requestAnimationFrame = (cb) => raf((t) => { if (!${onlyFrosted} || !root.classList.contains('clear-glass')) { const end = performance.now() + 60; while (performance.now() < end); } cb(t); });
+    const r = await (await import('/src/ui/smooth.ts')).judge();
+    window.requestAnimationFrame = window.__rafPlain;
+    return r;`;
+  await t.test('a sky that crawls under frosted glass gets clear glass, and its frames back', 'S2', async () => {
+    await go(page, '#/'); await awake(page); await sleep(1500);
+    const r = await page.eval(crawl(true));
+    expect.eq(r.glass, 'clear', 'the glass once the blur was the cost', JSON.stringify(r));
+    expect.ok(r.after != null && r.after < 40, `frames came back (${r.before?.toFixed(0)} → ${r.after?.toFixed(0)} ms)`);
+    const blurred = await page.eval(`[...document.querySelectorAll('.glass')].filter((e) => getComputedStyle(e).backdropFilter !== 'none').length`);
+    expect.eq(blurred, 0, 'panels still blurring the sky');
+  });
+  await t.test('a sky slow for another reason keeps its frosted glass', 'S2', async () => {
+    await go(page, '#/'); await awake(page); await sleep(1500);
+    const r = await page.eval(crawl(false));
+    expect.eq(r.glass, 'frosted', 'the glass when clearing it changed nothing', JSON.stringify(r));
+    expect.ok(!(await page.eval(`document.documentElement.classList.contains('clear-glass')`)), 'the clear-glass class is gone again');
+  });
+
   await t.test('a long session: 6 laps of every road while bells strike; heap, contexts and DOM do not grow without bound', 'S1', async (c) => {
     const heap = () => page.eval(`performance.memory ? performance.memory.usedJSHeapSize : 0`);
     const dom = () => page.eval(`({ nodes: document.getElementsByTagName('*').length, canvases: document.querySelectorAll('canvas').length, tags: document.querySelectorAll('.unit-tag').length, listeners: 0 })`);
@@ -42,7 +66,9 @@ export default async function (t, ctx) {
     const first = samples[1], last = samples[samples.length - 1];
     expect.lte(last.nodes, first.nodes * 1.5 + 200, 'DOM nodes stay bounded');
     expect.lte(last.canvases, 3, 'canvases stay bounded');
-    if (last.heap > first.heap * 1.6 + 30 * 1048576) c.warn(`heap grew from ${(first.heap / 1048576).toFixed(0)} MB to ${(last.heap / 1048576).toFixed(0)} MB over 5 laps`);
+    // Firefox has no performance.memory: its heap reads 0, so say so rather than pass a check that never looked
+    if (!last.heap) ctx.report.note('long session: this browser does not report its JS heap (no performance.memory); only the DOM and canvases were checked');
+    else if (last.heap > first.heap * 1.6 + 30 * 1048576) c.warn(`heap grew from ${(first.heap / 1048576).toFixed(0)} MB to ${(last.heap / 1048576).toFixed(0)} MB over 5 laps`);
     const ctxErrs = page.console.filter((m) => /Too many active WebGL contexts|CONTEXT_LOST|lost the WebGL/i.test(m.text));
     expect.eq(ctxErrs.length, 0, 'WebGL context loss or exhaustion', ctxErrs.map((e) => e.text));
     expect.noErrors(page.errors(ALLOW), 'console');

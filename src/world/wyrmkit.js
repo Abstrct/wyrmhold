@@ -161,7 +161,13 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
         o.onTap(new T.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1));
       }
     }
-    function wheel(e) { e.preventDefault(); goal.dist = clamp(goal.dist * (1 + e.deltaY * 0.0012), o.min || 10, o.max || 200); idle = 0; stray(true); }
+    // Firefox often counts a mouse wheel in lines (3 a notch) where Chrome counts ~100 px: read both as pixels,
+    // and cap one event so a page-sized jump can't flip the factor below zero.
+    function wheel(e) {
+      e.preventDefault();
+      var dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+      goal.dist = clamp(goal.dist * Math.exp(clamp(dy, -400, 400) * 0.0012), o.min || 10, o.max || 200); idle = 0; stray(true);
+    }
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
     canvas.addEventListener('pointerup', up);
@@ -317,8 +323,8 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
     var rmat = new T.ShaderMaterial({
       transparent: true, depthWrite: false, blending: T.AdditiveBlending,
       uniforms: { color: { value: new T.Color(0xffd98a).multiplyScalar(3.4) }, level: { value: 0 }, pr: { value: st.renderer.getPixelRatio() } },
-      vertexShader: 'attribute float vel; uniform float pr; varying float vV; void main(){ vV = vel; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp((7.0 + vel * 0.5) * pr * (60.0 / -mv.z), 2.0, 64.0); gl_Position = projectionMatrix * mv; }',
-      fragmentShader: 'uniform vec3 color; uniform float level; varying float vV; void main(){ vec2 p = gl_PointCoord - 0.5; float core = smoothstep(0.5, 0.0, length(p * vec2(4.0, 0.62))); float head = smoothstep(0.22, 0.0, length((p - vec2(0.0, 0.32)) * vec2(2.2, 1.6))); float a = (core * 0.7 + head) * level; gl_FragColor = vec4(mix(color, vec3(3.0, 2.8, 2.4), head * 0.5) * a, a); }'
+      vertexShader: 'attribute float vel; uniform float pr; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp((7.0 + vel * 0.5) * pr * (60.0 / -mv.z), 2.0, 64.0); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'uniform vec3 color; uniform float level; void main(){ vec2 p = gl_PointCoord - 0.5; float core = smoothstep(0.5, 0.0, length(p * vec2(4.0, 0.62))); float head = smoothstep(0.22, 0.0, length((p - vec2(0.0, 0.32)) * vec2(2.2, 1.6))); float a = (core * 0.7 + head) * level; gl_FragColor = vec4(mix(color, vec3(3.0, 2.8, 2.4), head * 0.5) * a, a); }'
     });
     var rain = new T.Points(rgeo, rmat); rain.frustumCulled = false; st.scene.add(rain);
     var on = 0, lvl = 0;
@@ -1419,7 +1425,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       halo.material.opacity = 0.25 + 0.12 * Math.sin(t * 1.7);
       renderer.render(scene, cam);
     })();
-    return { dispose: function () { cancelAnimationFrame(raf); releaseHooks(); renderer.dispose(); } };
+    // as a Stage does: give the GPU context back once the canvas has left the page, or each Grimoire visit leaves
+    // one live until a collection, and a browser at its cap of live contexts drops the oldest: Ysolde's owl
+    return { dispose: function () { cancelAnimationFrame(raf); releaseHooks(); renderer.dispose(); setTimeout(function () { if (!canvas.isConnected) renderer.forceContextLoss(); }, 2500); } };
   };
 
   /* -------------------------------------------------- mount helper for pages */

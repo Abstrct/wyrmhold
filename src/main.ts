@@ -16,6 +16,7 @@ import { openOath } from './ui/oath';
 import { mountGuide } from './ui/guide';
 import { guardTheVeil } from './ui/veilguard';
 import { watchOmens } from './ui/omens';
+import { watchFrames } from './ui/smooth';
 import { chantSung } from './ui/chants';
 import { takeClaim } from './core/claims';
 import { canRetry } from './game/actions';
@@ -113,6 +114,7 @@ async function boot() {
   onRoute(() => { void route(); });
   await route();
   mountGuide();
+  watchFrames();
   const b = document.getElementById('boot');
   b?.classList.add('gone');
   setTimeout(() => b?.remove(), 900);

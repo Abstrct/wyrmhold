@@ -246,6 +246,7 @@ export class GpuHasher {
   private slots: Slot[];
   private cur: Task | null = null;
   private rows = 256;
+  private latency = 0;   // ms a dispatch takes however small: the readback's own delay (Firefox: ~100)
   private spinning = false;
   private dead = false;
   private acc = { n: 0, t: 0 };
@@ -256,7 +257,7 @@ export class GpuHasher {
       { binding: 0, visibility: COMPUTE, buffer: { type: 'uniform' } },
       { binding: 1, visibility: COMPUTE, buffer: { type: 'storage' } },
     ] });
-    this.slots = [0, 1].map(() => {
+    this.slots = [0, 1, 2].map(() => {
       const uni = device.createBuffer({ size: 144, usage: UNIFORM | COPY_DST });
       const res = device.createBuffer({ size: 65 * 4, usage: STORAGE | COPY_SRC | COPY_DST });
       const read = device.createBuffer({ size: 65 * 4, usage: MAP_READ | COPY_DST });
@@ -283,6 +284,7 @@ export class GpuHasher {
       const name = [i?.vendor, i?.architecture, i?.device || i?.description].filter(Boolean).join(' ') || 'WebGPU';
       const h = new GpuHasher(dev, name);
       if (!(await h.selfTest())) { h.fail('self-test: GPU hashes disagree with the CPU'); return null; }
+      await h.measureLatency();
       return h.dead ? null : h;
     } catch (e) {
       console.info('[pow] no GPU engine:', (e as Error).message);
@@ -324,15 +326,17 @@ export class GpuHasher {
     return p;
   }
 
-  /* Two dispatches in flight: the GPU never waits on a readback, and a task switch lands
-   * within one dispatch (~40 ms). Results for a task that's no longer current are dropped. */
+  /* Two dispatches in flight (three behind a slow readback): the GPU never waits on a readback,
+   * and a task switch lands within one dispatch (~40 ms; ~100 ms in Firefox, whose readbacks
+   * all take that). Results for a task that's no longer current are dropped. */
   private async spin() {
     const flights: Flight[] = [];
     let lastDone = 0, measured = false;
     let win = { n: 0, t: 0 };
     try {
       while (!this.dead && (this.cur || flights.length)) {
-        while (this.cur && flights.length < 2 && !this.dead) {
+        // a third in flight where the readback's own wait is longer than a dispatch should run (Firefox)
+        while (this.cur && flights.length < (this.latency > TARGET_MS ? 3 : 2) && !this.dead) {
           const free = this.slots.find((s) => !flights.some((f) => f.slot === s))!;
           const f = await this.dispatch(free, this.cur);
           if (!f) break;
@@ -349,14 +353,19 @@ export class GpuHasher {
         const hashes = f.rows * PER_ROW;
         // Size dispatches to TARGET_MS from throughput over half-second windows (completions
         // can land in the same tick, so single gaps lie); before the first window, ramp up.
+        // Where every readback waits a fixed while whatever the size (Firefox answers mapAsync
+        // on a ~100 ms poll), throughput only follows the size, and sizing to 40 ms from it
+        // kept dispatches tiny for good: 0.4 M/s from a GPU good for 1000 M/s. So the target
+        // is never shorter than that wait: the GPU works through it instead of idling.
+        const target = Math.max(TARGET_MS, this.latency);
         win.n += hashes;
         if (now - win.t >= 500) {
           const perMs = win.n / (now - win.t);
           this.rate = measured ? this.rate * 0.7 + perMs * 300 : perMs * 1000;
-          this.rows = Math.round(Math.min(ROWS_PER_EPOCH, Math.max(MIN_ROWS, (perMs * TARGET_MS) / PER_ROW)));
+          this.rows = Math.round(Math.min(ROWS_PER_EPOCH, Math.max(MIN_ROWS, (perMs * target) / PER_ROW)));
           win = { n: 0, t: now };
           measured = true;
-        } else if (!measured && gap < TARGET_MS / 2) this.rows = Math.min(ROWS_PER_EPOCH, this.rows * 2);
+        } else if (!measured && gap < target / 2) this.rows = Math.min(ROWS_PER_EPOCH, this.rows * 2);
         if (f.task !== this.cur) continue;
         this.acc.n += hashes;
         if (now - this.acc.t > 250) { this.onProgress(f.task.id, this.acc.n, now - this.acc.t); this.acc = { n: 0, t: now }; }
@@ -420,6 +429,28 @@ export class GpuHasher {
       if (z > max || i >= rows * PER_ROW || hexZeros(proofHex(prefix + gpuNonce(job, Math.floor(i / PER_ROW), i % PER_ROW))) !== z) return false;
     }
     return true;
+  }
+
+  /** The least time a dispatch takes, however small (the floor under every readback), and from a
+   *  bigger one beside it, what the GPU itself does per row: the first dispatches start near their
+   *  size instead of doubling up to it from 256 rows (seconds, behind a 100 ms readback). */
+  private async measureLatency() {
+    const L = gpuLayout('5-431197BUILD3005708NONCE'), job = epochJob(L, 4243), pipe = await this.pipeline(L.wi);
+    const time = async (rows: number) => {
+      let best = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const t0 = performance.now();
+        await this.launch(this.slots[0], pipe, job, 0, rows, 64);
+        best = Math.min(best, performance.now() - t0);
+      }
+      return best;
+    };
+    const PROBE = 16384;
+    const small = await time(MIN_ROWS), big = await time(PROBE);
+    if (!Number.isFinite(small) || !Number.isFinite(big)) return;
+    this.latency = small;
+    const perRow = Math.max(0.25, big - small) / PROBE;      // ms; a difference under the clock's grain is read as a quarter ms
+    this.rows = Math.round(Math.min(ROWS_PER_EPOCH, Math.max(MIN_ROWS, Math.max(TARGET_MS, small) / perRow)));
   }
 
   /** Re-hash on the CPU before believing anything the GPU says. */
