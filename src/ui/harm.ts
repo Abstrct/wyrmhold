@@ -89,7 +89,7 @@ export function awaySummary(r: AwayReport | null): string {
   const ended = new Set([...took, ...broke, ...left].map((x) => x.foe));
   const came = by(['initiated', 'shieldsVulnerable']).filter((x) => !ended.has(x.foe));
   const seized = took.reduce((n, x) => n + (x.seized || 0), 0);
-  if (took.length) parts.push(`${listOf(took.map((x) => who(x.foe)))} plundered your isle${seized ? ` and carried off ${sheaves(seized)} of wildroot` : ''}`);
+  if (took.length) parts.push(`${listOf(took.map((x) => who(x.foe)))} plundered your isle`);
   if (broke.length) parts.push(`${listOf(broke.map((x) => whose(x.foe)))} ${broke.length > 1 ? 'raids were' : 'raid was'} broken`);
   if (left.length) parts.push(`${listOf(left.map((x) => who(x.foe)))} came to raid your isle but rode home with nothing`);
   if (came.length) parts.push(`${listOf(came.map((x) => who(x.foe)))} came to raid your isle`);
@@ -98,6 +98,8 @@ export function awaySummary(r: AwayReport | null): string {
   if (strikers.length) parts.push(`${listOf(strikers.map(who))} struck your beasts`);
   const fallen = fallenIn(r);
   if (fallen.length) parts.push(`your ${tally(fallen)} fell`);
+  // what was taken, said as its own part (folded into the plunder it read as if the beasts were carried off too)
+  if (seized) parts.push(`${sheaves(seized)} of wildroot ${seized === 1 ? 'was' : 'were'} carried off`);
   for (const g of r.good) {
     if (g.kind === 'woke') continue;
     if (g.kind === 'delved') parts.push(`${sheaves(g.n || 0)} of wildroot ${g.n === 1 ? 'was' : 'were'} delved`);

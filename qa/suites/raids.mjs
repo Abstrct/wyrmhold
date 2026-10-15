@@ -103,7 +103,7 @@ export default async function (t, ctx) {
       // and comes back, landing on the Gate as a returning warden does: its welcome says it in one line
       await page.goto(ctx.app.url + '?again=1#/', { timeout: 120000 });
       await page.waitFor(`!document.getElementById('boot') || document.getElementById('boot').classList.contains('gone')`, { what: 'the boot veil', timeout: 90000 });
-      await page.waitFor(`/While you were away: Grimwald plundered your isle and your Elder Wyrm fell/.test(document.querySelector('.gate-welcome')?.textContent || '')`, { what: 'the welcome to carry the news', timeout: 90000 })
+      await page.waitFor(`/While you were away: Grimwald plundered your isle, your Elder Wyrm fell and 2 sheaves of wildroot were carried off/.test(document.querySelector('.gate-welcome')?.textContent || '')`, { what: 'the welcome to carry the news', timeout: 90000 })
         .catch(async (e) => { throw new (await import('../lib/report.mjs')).Failure(e.message, [await page.eval(`document.querySelector('.gate-welcome')?.textContent || ''`), await page.eval(`localStorage.getItem('wyrmhold.raidlog.${me.pid}')`)]); });
       expect.eq(await page.eval(`document.querySelector('.gate-welcome').getAttribute('aria-live')`), 'polite', 'the welcome is heard politely');
       // beasts that were already awake are never told as newly woken (a missed warband read once made them so)
@@ -116,7 +116,7 @@ export default async function (t, ctx) {
       const card = await page.eval(`const e = document.querySelector('.away-card'); return { text: e.innerText, role: e.getAttribute('role'), head: document.getElementById(e.getAttribute('aria-labelledby'))?.textContent, back: [...e.querySelectorAll('.raid-back')].map((b) => b.getAttribute('aria-label')) }`);
       expect.eq(card.role, 'region', 'a region a screen reader can find');
       expect.eq(card.head, 'While you were away', 'named by its heading');
-      expect.includes(card.text, 'Grimwald plundered your isle and your Elder Wyrm fell', 'the lead says who and what');
+      expect.includes(card.text, 'Grimwald plundered your isle, your Elder Wyrm fell and 2 sheaves of wildroot were carried off', 'the lead says who, what fell and what was taken');
       expect.includes(card.text, '2 sheaves of wildroot carried off', 'the wildroot taken');
       expect.includes(card.text, 'Grimwald’s Kraken felled your Elder Wyrm', 'the loss, by whom');
       expect.ok(!/delved/.test(card.text), 'no wildroot is said to be delved when it was only carried off', card.text);
