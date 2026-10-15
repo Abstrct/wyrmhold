@@ -51,11 +51,16 @@ export async function judge(): Promise<{ before: number | null; after?: number |
   return { before, after, glass: helped ? 'clear' : 'frosted' };
 }
 
-/** Judge once per visit, a second after the first sky wakes (its shaders have settled by then). */
+/** Judge once per visit, a second after the first sky wakes (its shaders have settled by then); on a screen
+ *  with no sky (the Grimoire, its small portraits under the same glass), once it has stood a moment. */
 export function watchFrames() {
+  let shown = '', since = 0;
   const look = async () => {
-    if (judged || judging) return;
-    if (!document.querySelector('#app canvas.awake') || document.visibilityState !== 'visible') return;
+    if (judged || judging || document.visibilityState !== 'visible') return;
+    const route = document.body.dataset.route || '';
+    if (route !== shown) { shown = route; since = performance.now(); }
+    const sky = document.querySelector('#app .stage canvas');
+    if (sky ? !sky.classList.contains('awake') : performance.now() - since < 2500) return;
     judging = true;
     await wait(1000);
     const r = await judge().catch(() => null);

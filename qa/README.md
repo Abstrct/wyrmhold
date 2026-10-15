@@ -137,8 +137,12 @@ BiDi cannot do, and so what a Firefox run cannot judge:
 - **The JS heap.** There is no `performance.memory`, so `perf` checks only the DOM and canvases there and says so.
 - **WebGPU** has no adapter in headless Firefox (a headed one has). `node qa/browsers.mjs --headed` times the GPU chant.
 
-If the BiDi socket drops under a live Firefox (seen once, 14 minutes into a full run), the driver starts
-Firefox again: what was in flight fails with the close code, and the next check that opens its screen carries on.
+The driver talks to Firefox through its own small WebSocket client (`lib/ws.mjs`, a plain TCP socket), not
+Node's built-in one: in every full run, about fourteen minutes in, Node's client lost the BiDi connection (1006)
+and then every new one it opened, within 200 ms, while another process reached the same Firefox at once. Firefox
+listens on a free port of its own choosing (`--remote-debugging-port=0`). Should a socket still drop under a live
+Firefox, the driver starts Firefox again: what was in flight fails with who closed it and why (`QA_BIDI_DEBUG=1`
+adds Firefox's last words), and the next check that opens its screen carries on.
 
 **Test seams in the game** are tiny and inert in play: `mountScene` puts the scene controller on the
 canvas as `canvas.__wyrmCtl`; the Hold and Skirmish scenes expose `where(id)` and `census()`; the dev

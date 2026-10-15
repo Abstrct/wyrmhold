@@ -26,7 +26,8 @@ export default async function (t, ctx) {
     await go(page, '#/leyweave'); await sleep(2500);
     text = await visibleText(page);
     expect.ok(/quiet|not answering|could not|again|Reading/i.test(text), 'the Leyweave says so too', text.slice(0, 400));
-    expect.noErrors(page.errors([...ALLOW, /Failed to fetch|ERR_CONNECTION|net::/]), 'console (network failures are expected, exceptions are not)');
+    // Firefox words a dropped connection as a blocked cross-origin read ("CORS request did not succeed")
+    expect.noErrors(page.errors([...ALLOW, /Failed to fetch|ERR_CONNECTION|net::|CORS request did not succeed|NetworkError when attempting to fetch/]), 'console (network failures are expected, exceptions are not)');
     const st = await stage(page); expect.ok(!st || st.finite, 'camera finite');
   });
   await t.test('…and when the ledger returns, the screens recover on their own', 'S1', async () => {

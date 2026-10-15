@@ -8,6 +8,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MiniSocket } from './ws.mjs';
 
 const FIREFOX_PATHS = [process.env.QA_FIREFOX, '/Applications/Firefox.app/Contents/MacOS/firefox', '/usr/bin/firefox', '/usr/lib/firefox/firefox'].filter(Boolean);
 export function findFirefox() {
@@ -30,8 +31,9 @@ const PREFS = {
 };
 
 /** A Firefox process on a fresh profile, listening for BiDi. */
+let launches = 0;
 async function startFirefox({ headed, width, height, prefs, port }) {
-  const profile = join(tmpdir(), `wyrmhold-qa-ff-${process.pid}-${port}`);
+  const profile = join(tmpdir(), `wyrmhold-qa-ff-${process.pid}-${++launches}`);
   rmSync(profile, { recursive: true, force: true }); mkdirSync(profile, { recursive: true });
   writeFileSync(join(profile, 'user.js'), Object.entries({ ...PREFS, ...prefs }).map(([k, v]) => `user_pref(${JSON.stringify(k)}, ${JSON.stringify(v)});`).join('\n') + '\n');
   const args = [headed ? '' : '--headless', '--no-remote', '--new-instance', '--profile', profile, `--remote-debugging-port=${port}`, `--width=${width}`, `--height=${height}`, 'about:blank'].filter(Boolean);
@@ -44,14 +46,16 @@ async function startFirefox({ headed, width, height, prefs, port }) {
   });
   for (let i = 0; i < 300 && !wsUrl; i++) { if (proc.exitCode != null) break; await sleep(100); }
   if (!wsUrl) { proc.kill(); throw new Error('Firefox did not open its BiDi port. ' + stderr.slice(-600)); }
-  return { proc, profile, url: wsUrl.replace(/\/?$/, '') + '/session' };
+  return { proc, profile, url: wsUrl.replace(/\/?$/, '') + '/session', stderr: () => stderr };
 }
 
-export async function launchFirefox({ headed = false, width = 1280, height = 800, prefs = {}, port = 9300 + Math.floor(Math.random() * 600) } = {}) {
+/* Port 0: Firefox takes a free port and says which (a range such as 9300–9900 is shared with other harnesses'
+ * Chromes on the same machine). */
+export async function launchFirefox({ headed = false, width = 1280, height = 800, prefs = {}, port = 0 } = {}) {
   const opts = { headed, width, height, prefs, port };
   const f = await startFirefox(opts);
   const browser = await Browser.connect(f.url);
-  Object.assign(browser, { proc: f.proc, profile: f.profile, opts, defaultSize: { width, height } });
+  Object.assign(browser, { proc: f.proc, profile: f.profile, stderr: f.stderr, opts, defaultSize: { width, height } });
   await browser.findHome();
   return browser;
 }
@@ -67,8 +71,8 @@ class Browser {
   /** A socket and a session on it. Called again after a drop: the tabs (browsing contexts) outlive a session,
    *  so every Page carries on with its own context once the new session listens again. */
   async open() {
-    const ws = new WebSocket(this.url);
-    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('BiDi socket failed')); });
+    const ws = new MiniSocket(this.url);   // not Node's WebSocket: see ws.mjs
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = (e) => rej(new Error('BiDi socket failed: ' + (e?.message || ''))); });
     this.ws = ws;
     ws.onmessage = (m) => { this.lastIn = { size: m.data.length, at: Date.now() }; if (m.data.length > (this.maxIn || 0)) this.maxIn = m.data.length; this.dispatch(JSON.parse(m.data)); };
     ws.onclose = (e) => { if (ws === this.ws) this.lost(e); };
@@ -86,16 +90,20 @@ class Browser {
     const tree = await this.call('browsingContext.getTree', {});
     this.home = tree.contexts[0]?.context;
   }
-  /* A socket that closed under a live Firefox (seen once, 14 minutes into a full run) failed every check after it.
+  /* A socket that closed under a live Firefox (Node's WebSocket did, in every full run, until ws.mjs) failed every check after it.
    * Firefox keeps a dropped socket's session, so a new one is refused and the old can't be rejoined: start Firefox
    * afresh instead. What was in flight fails, saying why; the next check that opens its screen (openGame recycles
    * the page) carries on in the new browser. */
   lost(e) {
-    const why = `BiDi socket closed (${e.code}${e.reason ? ' ' + e.reason : ''})`;
+    const why = `BiDi socket closed (${e.code}${e.reason ? ' ' + e.reason : ''}${e.why ? ': ' + e.why : ''})`;
     const pending = [...this.pending.values()]; this.pending.clear();
     for (const p of pending) p.reject(new Error(`${why} during ${p.method}`));
     if (this.closing) { this.closed = why; return; }
-    console.error(`[bidi] ${why}; Firefox ${this.proc?.exitCode != null ? 'exited ' + this.proc.exitCode : 'still running'}; last in ${this.lastIn?.size} B ${Date.now() - (this.lastIn?.at || 0)} ms ago, largest ${this.maxIn} B; last out ${this.lastOut}; in flight ${pending.map((p) => p.method).join(', ') || 'nothing'}. Starting Firefox again.`);
+    if (this.relaunching) return;   // a start under way sees its own socket fail, and tries again itself
+    const old = this.proc;
+    console.error(`[bidi] ${why}; last in ${this.lastIn?.size} B ${Date.now() - (this.lastIn?.at || 0)} ms ago, largest ${this.maxIn} B; last out ${this.lastOut}; in flight ${pending.map((p) => p.method).join(', ') || 'nothing'}. Starting Firefox again.`);
+    if (process.env.QA_BIDI_DEBUG) console.error('[bidi] Firefox said, last:\n' + (this.stderr?.() || '').split('\n').slice(-25).join('\n'));
+    setTimeout(() => console.error(`[bidi] the Firefox that dropped, half a second on: ${old?.exitCode != null ? 'exited ' + old.exitCode : old?.signalCode ? 'killed by ' + old.signalCode : 'still running'}`), 500);
     for (const p of this.pages.values()) p.ctx = null;   // their tabs go with the old process
     this.pages.clear();
     this.reconnecting = this.relaunch()
@@ -103,15 +111,25 @@ class Browser {
       .catch((x) => { this.closed = `${why}; starting again failed: ${x.message}`; console.error('[bidi] ' + this.closed); })
       .finally(() => { this.reconnecting = null; });
   }
+  /** A fresh Firefox, tried a few times with growing waits: whatever closed the last socket may still be about. */
   async relaunch() {
-    try { this.proc?.kill('SIGKILL'); } catch { /* gone */ }
-    await sleep(300);
-    rmSync(this.profile, { recursive: true, force: true });
-    const f = await startFirefox({ ...this.opts, port: this.opts.port + 1 });
-    this.opts.port += 1;
-    Object.assign(this, { proc: f.proc, profile: f.profile, url: f.url });
-    await this.open();
-    await this.findHome();
+    this.relaunching = true;
+    try {
+      for (let attempt = 1; ; attempt++) {
+        try { this.proc?.kill('SIGKILL'); } catch { /* gone */ }
+        await sleep(300);
+        rmSync(this.profile, { recursive: true, force: true });
+        const f = await startFirefox(this.opts);
+        Object.assign(this, { proc: f.proc, profile: f.profile, url: f.url, stderr: f.stderr });
+        const t0 = Date.now();
+        try { await this.open(); await this.findHome(); return; }
+        catch (x) {
+          console.error(`[bidi] start ${attempt} failed after ${Date.now() - t0} ms: ${x.message}; that Firefox ${f.proc.exitCode != null ? 'exited ' + f.proc.exitCode : f.proc.signalCode || 'is running'}; it said: ${f.stderr().split('\n').slice(-6).join(' | ')}`);
+          if (attempt >= 4) throw x;
+          await sleep([2000, 5000, 10000][attempt - 1]);
+        }
+      }
+    } finally { this.relaunching = false; }
   }
   send(method, params = {}) {
     if (this.reconnecting) return this.reconnecting.then(() => this.send(method, params));

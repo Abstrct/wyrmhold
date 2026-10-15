@@ -1425,7 +1425,9 @@ import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
       halo.material.opacity = 0.25 + 0.12 * Math.sin(t * 1.7);
       renderer.render(scene, cam);
     })();
-    return { dispose: function () { cancelAnimationFrame(raf); releaseHooks(); renderer.dispose(); } };
+    // as a Stage does: give the GPU context back once the canvas has left the page, or each Grimoire visit leaves
+    // one live until a collection, and a browser at its cap of live contexts drops the oldest: Ysolde's owl
+    return { dispose: function () { cancelAnimationFrame(raf); releaseHooks(); renderer.dispose(); setTimeout(function () { if (!canvas.isConnected) renderer.forceContextLoss(); }, 2500); } };
   };
 
   /* -------------------------------------------------- mount helper for pages */
