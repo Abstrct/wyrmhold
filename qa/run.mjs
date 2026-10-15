@@ -12,6 +12,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { launchChrome } from './lib/cdp.mjs';
+import { launchFirefox } from './lib/bidi.mjs';
 import { Ledger } from './lib/ledger.mjs';
 import * as worldLib from './lib/world.mjs';
 const { standardSky } = worldLib;
@@ -46,6 +47,8 @@ const out = resolve(opt('--out', join(HERE, 'reports', new Date().toISOString().
 const appUrlOpt = opt('--app', null);
 const blockMs = Number(opt('--blockMs', 1000));
 const grep = opt('--grep', null);
+// the browser under test: Chrome (the default, over CDP) or Firefox (over WebDriver BiDi)
+const browserKind = opt('--browser', 'chrome');
 const wanted = args.filter((a) => !a.startsWith('--'));
 const unknown = wanted.filter((w) => !SUITES.some(([n]) => n === w));
 if (unknown.length) { console.error('unknown suite(s): ' + unknown.join(', ')); process.exit(2); }
@@ -63,7 +66,8 @@ const sky = standardSky(ledger.lcdUrl);
 ledger.world = sky.w;
 sky.w.anyAddressPlayer = sky.me.pid;
 const app = appUrlOpt ? { url: appUrlOpt.replace(/\/?$/, '/'), stop: async () => {} } : await startApp({ lcdUrl: ledger.lcdUrl, wsUrl: ledger.wsUrl });
-const browser = await launchChrome({ headed, gpu });
+const browser = browserKind === 'firefox' ? await launchFirefox({ headed }) : await launchChrome({ headed, gpu });
+browser.kind ||= browserKind;
 console.log(`proving ground · ledger ${ledger.lcdUrl} · game ${app.url} · ${browser.version} · report ${out}`);
 
 const ctx = { browser, app, ledger, sky, report, out, net, worldLib, async newPage(o) { return browser.newPage(o); } };

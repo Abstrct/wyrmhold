@@ -21,6 +21,7 @@
 /* the Chronicle's lines of harm */
 .chron li.harm.grave > span:last-child { color: var(--ember-ink); }
 .chron li.harm .raid-back { margin-left: 4px; min-height: 28px; }
+@media (pointer: coarse), (max-width: 1180px) { .raid-back, .chron li.harm .raid-back { min-height: 36px; } }
 
 /* Raiders over your isle: a small alert that stays, on every screen, until they leave */
 .raid-alert { position: fixed; z-index: 36; right: 16px; bottom: 16px; max-width: min(460px, calc(100vw - 32px)); display: flex; align-items: center; gap: 10px;

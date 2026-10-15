@@ -19,6 +19,8 @@ node qa/run.mjs smoke --headed --keep       # watch it; leave the servers up aft
 node qa/run.mjs logic --net                 # also diff the shipped catalogue against the public ledger
 node qa/run.mjs flows --grep tab            # only the checks of a suite whose name matches
 node qa/run.mjs hold skirmish --gpu          # draw on this machine's GPU (Metal on a Mac): far faster than software WebGL
+node qa/run.mjs --browser firefox            # the same suites in Firefox (see "Firefox" below)
+node qa/browsers.mjs                         # Chrome and Firefox side by side: load, frames, CPU, memory, chant speed
 ```
 
 Reports land in `qa/reports/<timestamp>/` as `report.md`, `report.json` and an `evidence/` folder of
@@ -76,6 +78,7 @@ qa/
   run.mjs            the runner: ledger + game + Chrome, suites, report, exit code
   lib/
     cdp.mjs          Chrome DevTools driver (launch, pages, eval, input, screenshots, console capture)
+    bidi.mjs         Firefox driver over WebDriver BiDi, with the same Page API as cdp.mjs
     ledger.mjs       the mock ledger: LCD (REST) + live feed (Tendermint WebSocket) + mock coven scribe
     world.mjs        fixture skies: ids, wardens, isles, warbands, every beast in every state
     app.mjs          Vite serving src/ against the mock ledger
@@ -118,6 +121,24 @@ network unless `--net` is passed.
 real. Every page records console messages, uncaught exceptions and failed requests; `page.errors(ALLOW)`
 is the standard "did anything go wrong" check. Screenshots are decoded and measured (`lookAtStage`) so a
 black sky is detected the way a player sees it, not inferred.
+
+**Firefox** (`--browser firefox`, `QA_FIREFOX=/path/to/firefox` if it is not in a standard place) runs headless
+on the machine's GPU through `lib/bidi.mjs`. Its Page API matches cdp.mjs, so `game.mjs` and the suites
+run unchanged; the few DevTools calls the suites make (`Input.dispatchTouchEvent`,
+`Input.synthesizeScrollGesture`, `Input.dispatchMouseEvent`) are translated into BiDi input actions. What
+BiDi cannot do, and so what a Firefox run cannot judge:
+
+- **Touch scrolling.** A WebDriver touch drag reaches the page as pointer and touch events but never pans it
+  natively (not even a plain long page), so in Firefox the `responsive` touch check judges only its camera half
+  (a drag on the panels never turns the camera; a sideways one on the sky does) and notes the rest.
+- **A touch screen.** Firefox 158 has no `emulation.setTouchOverride`, so `(pointer: coarse)` and
+  `navigator.maxTouchPoints` stay desktop at every phone size: touch-only styles are not exercised.
+- **Media features per page** (`prefers-reduced-motion`): `emulateMedia` is a no-op that sets `page.mediaUnsupported`.
+- **The JS heap.** There is no `performance.memory`, so `perf` checks only the DOM and canvases there and says so.
+- **WebGPU** has no adapter in headless Firefox (a headed one has). `node qa/browsers.mjs --headed` times the GPU chant.
+
+If the BiDi socket drops under a live Firefox (seen once, 14 minutes into a full run), the driver starts
+Firefox again: what was in flight fails with the close code, and the next check that opens its screen carries on.
 
 **Test seams in the game** are tiny and inert in play: `mountScene` puts the scene controller on the
 canvas as `canvas.__wyrmCtl`; the Hold and Skirmish scenes expose `where(id)` and `census()`; the dev
