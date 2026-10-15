@@ -84,8 +84,12 @@ export function awaySummary(r: AwayReport | null): string {
   const parts: string[] = [];
   const raids = raidsIn(r);
   const by = (stage: string[]) => raids.filter((x) => stage.includes(x.stage));
-  const took = by(['raidSuccessful']), broke = by(['attackerDefeated']), left = by(['attackerRetreated']), came = by(['initiated', 'shieldsVulnerable']);
-  if (took.length) parts.push(`${listOf(took.map((x) => who(x.foe)))} plundered your isle`);
+  const took = by(['raidSuccessful']), broke = by(['attackerDefeated']), left = by(['attackerRetreated']);
+  // a raider whose raid is told by how it ended is not told again as merely coming
+  const ended = new Set([...took, ...broke, ...left].map((x) => x.foe));
+  const came = by(['initiated', 'shieldsVulnerable']).filter((x) => !ended.has(x.foe));
+  const seized = took.reduce((n, x) => n + (x.seized || 0), 0);
+  if (took.length) parts.push(`${listOf(took.map((x) => who(x.foe)))} plundered your isle${seized ? ` and carried off ${sheaves(seized)} of wildroot` : ''}`);
   if (broke.length) parts.push(`${listOf(broke.map((x) => whose(x.foe)))} ${broke.length > 1 ? 'raids were' : 'raid was'} broken`);
   if (left.length) parts.push(`${listOf(left.map((x) => who(x.foe)))} came to raid your isle but rode home with nothing`);
   if (came.length) parts.push(`${listOf(came.map((x) => who(x.foe)))} came to raid your isle`);
@@ -101,6 +105,7 @@ export function awaySummary(r: AwayReport | null): string {
   }
   const woke = r.good.filter((g) => g.kind === 'woke').map((g) => kind(g.typeId));
   if (woke.length) parts.push(`your ${tally(woke)} woke`);
+  if (!parts.length && r.quiet) return 'While you were away: all quiet. No raider came near your isle.';
   return parts.length ? `While you were away: ${listOf(parts)}.` : '';
 }
 
@@ -161,6 +166,7 @@ export function awayCard(player: () => PlayerState | null, mine: () => boolean, 
     const rows: HTMLElement[] = [];
     const row = (tone: 'bad' | 'good' | 'calm', text: string, at?: number, extra?: Node | null) =>
       rows.push(h('li', { class: `away-row ${tone}` }, h('span', { class: 'away-text' }, text, at ? h('span', { class: 'when' }, ` · ${agoMs(at)}`) : null), extra || null));
+    if (r.quiet) row('calm', 'All quiet: no raider came near your isle.');
     const raids = raidsIn(r);
     for (const x of raids) {
       const foe = whose(x.foe);

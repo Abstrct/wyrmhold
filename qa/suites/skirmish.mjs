@@ -275,6 +275,8 @@ export default async function (t, ctx) {
     ctx.ledger.emitTx([{ type: 'EventAttack', key: 'eventAttackDetail', data: detail }]);
     await page.waitFor(`document.querySelectorAll('.fray-row').length > 0`, { what: 'the fray to tell the blow', timeout: 15000 });
     const row = await page.eval(`document.querySelector('.fray-row').innerText.replace(/\\s+/g, ' ')`);
+    // and spoken, once, for a warden who cannot see it (Sam, 2026-10-14: "the fight is silent")
+    await page.waitFor(`/[a-z]/i.test(document.querySelector('[role=log][aria-live=polite].sr-only')?.textContent || '')`, { what: 'the blow to be spoken', timeout: 5000 });
     expect.ok(/Grimwald’s Harpy strikes your Elder Wyrm/.test(row), 'who struck whom', row);
     expect.ok(/−2 · 4 of 6 left/.test(row) && /Your Elder Wyrm strikes back −2/.test(row), 'what it did and what answered', row);
     await sleep(900);

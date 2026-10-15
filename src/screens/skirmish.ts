@@ -46,16 +46,23 @@ export function skirmish(ctx: Ctx): Screen {
   const sBtn = h('button', { type: 'button', class: 'btn ember unleash', 'data-tut': 'unleash', onclick: (e: Event) => { pressAt = e.timeStamp || performance.now(); press(); } }, sBtnFill, sBtnLabel, sBtnSub);
   const sPending = h('div', { class: 'fc-pending', role: 'status', 'aria-live': 'polite' });
   const sNote = h('div');
+  // the danger of staying sits under the big button, never over it: a block that comes and goes above it moved
+  // the button under a finger mid-fight, and a tap meant for Unleash once landed on Ride home
+  const sDanger = h('div');
   const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Camera view' });
   // Fight on: the wisest blow, struck each time breath fills, until the Wyrm would be at risk
   const fightOnBtn = h('button', { type: 'button', class: 'fight-on', 'aria-pressed': 'false', title: 'Strike the wisest blow each time your breath fills. Stops if your Elder Wyrm would be at risk.', onclick: () => { fightOn = !fightOn; fightNote = ''; if (fightOn) chose = false; sigs.strike = ''; paint(); } },
     h('span', { class: 'fo-pip', 'aria-hidden': 'true' }), h('span', null, 'Fight on'));
   const strike = h('section', { class: 'glass panel strike-panel', 'aria-label': 'Strike' }, sHead, sBody,
-    h('div', { class: 'row fc-act' }, sBtn, fightOnBtn, viewSeg), sPending, sNote);
-  const fray = h('ol', { class: 'fray-list', 'aria-label': 'Blows struck' });
+    h('div', { class: 'row fc-act' }, sBtn, fightOnBtn, viewSeg), sDanger, sPending, sNote);
+  // focusable, so a keyboard can scroll back through a long fight (it scrolls under a finger or a wheel as well)
+  const fray = h('ol', { class: 'fray-list', 'aria-label': 'Blows struck', tabindex: '0' });
+  // each new blow is spoken once (the list itself is rebuilt as the ledger moves, so it cannot be the live region)
+  const frayVoice = h('p', { class: 'sr-only', role: 'log', 'aria-live': 'polite' });
   const frayBox = h('section', { class: 'glass panel fray', 'aria-label': 'The fray' },
     h('div', { class: 'row between', style: { marginBottom: '8px' } }, h('h2', { class: 'display', style: { fontSize: '19px' } }, 'The fray'), h('span', { class: 'faint', style: { fontSize: '12px' } }, 'every blow, as the ledger tells it')), fray);
-  const status = h('div', { class: 'warbar-slot' });
+  // the slot is the live region: the war bar is rebuilt inside it, and a node inserted with its own live role is seldom read
+  const status = h('div', { class: 'warbar-slot', role: 'status', 'aria-live': 'polite' });
   // your side holds your warband and the fray; theirs, their hold; the strike floats between them
   const el = h('div', { class: 'screen' }, h('div', { class: 'stage' }, canvas),
     h('div', { class: 'hud sk-hud' }, bar.el, status,
@@ -77,9 +84,23 @@ export function skirmish(ctx: Ctx): Screen {
   const fallingSoon = new Set<string>();
   const told: Told[] = [];
   /** This raid's tale: our blows, theirs felled, ours lost (reset when a fight begins). */
-  let tally = { blows: 0, felled: [] as string[], lost: [] as string[] }, wasFighting = false;
+  // `hearts`: each of our beasts' hearts when the fight began, so the tale can tell wounds as well as falls
+  let tally = { blows: 0, felled: [] as string[], lost: [] as string[], hearts: new Map<string, number>() }, wasFighting = false;
+  const heartsNow = () => new Map([...(empire.commander?.structs.values() || [])].filter((s) => !s.destroyed).map((s) => [s.id, s.health] as [string, number]));
   const listOf = (xs: string[]) => { const c = new Map<string, number>(); for (const x of xs) c.set(x, (c.get(x) || 0) + 1); const parts = [...c].map(([n, k]) => (k > 1 ? `${k} ${n}s` : `their ${n}`)); return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0] || ''; };
-  const tale = () => tally.blows ? ` In ${tally.blows} ${tally.blows === 1 ? 'blow' : 'blows'} you felled ${tally.felled.length ? listOf(tally.felled) : 'nothing'}${tally.lost.length ? `, and lost ${listOf(tally.lost).replace(/their /g, 'your ')}` : ', and lost nothing'}.` : '';
+  /** Our beasts that came out of this fight with fewer hearts (and still standing): "your Elder Wyrm took 4 wounds (2 of 6 left)". */
+  const woundsTold = () => {
+    const hurt = [...(empire.commander?.structs.values() || [])].filter((s) => !s.destroyed && tally.hearts.has(s.id) && s.health < tally.hearts.get(s.id)!)
+      .map((s) => { const n = tally.hearts.get(s.id)! - s.health; return `your ${beastName(s.typeId)} took ${n} ${n === 1 ? 'wound' : 'wounds'} (${s.health} of ${s.type?.maxHealth ?? '?'} left)`; });
+    return hurt.length > 1 ? hurt.slice(0, -1).join(', ') + ' and ' + hurt[hurt.length - 1] : hurt[0] || '';
+  };
+  const tale = () => {
+    if (!tally.blows) return '';
+    const wounds = woundsTold();
+    // "lost nothing" only when nothing was lost and nothing hurt: wounds never mend, and the warden should know
+    const lost = tally.lost.length ? `, and lost ${listOf(tally.lost).replace(/their /g, 'your ')}` : wounds ? '' : ', and lost nothing';
+    return ` In ${tally.blows} ${tally.blows === 1 ? 'blow' : 'blows'} you felled ${tally.felled.length ? listOf(tally.felled) : 'nothing'}${lost}.${wounds ? ` ${wounds.charAt(0).toUpperCase() + wounds.slice(1)}: wounds never mend.` : ''}`;
+  };
   const toldKeys = new Set<string>();
   const sigs: Record<string, string> = {};
 
@@ -268,7 +289,9 @@ export function skirmish(ctx: Ctx): Screen {
     if (!r.weapon) { if (r.soar) soar(a, r.soar); else say(retellError(r.why)); return; }
     // a blow whose answer would likely fell your Wyrm is struck only on a second, deliberate press
     const fc = forecast(a, t, r.weapon, f);
-    if (fc && isWyrm(a) && fc.lost >= 0.5 && !fightOn && !confirmed(`${a.id}>${t.id}`)) return;
+    // a deadly blow asks twice; at home it does not: their warband strikes the Wyrm whether or not it swings,
+    // and a question read while they strike cost a defender her one blow
+    if (fc && isWyrm(a) && fc.lost >= 0.5 && !fightOn && !defending() && !confirmed(`${a.id}>${t.id}`)) return;
     armed = null;
     strikeNote = '';
     try {
@@ -335,7 +358,12 @@ export function skirmish(ctx: Ctx): Screen {
   let armWarn = '';
   let fightOn = false, fightNote = '', autoBusy = false, unheard: string | null = null;
   /** The blow Fight on would strike: the wisest that never risks the Elder Wyrm, and never one that could fell the striker outright. */
-  function autoMove(list: Move[]): Move | null { return wisest(list, (m) => (isWyrm(m.a) ? m.f.lost === 0 : m.f.lost < 0.5)); }
+  /** Fight on's blow: never one that could fell our Wyrm, and none that would wound it while another of ours can
+   * strike instead (wounds never mend: two players came out of their first Fight on with a Wyrm at 2 of 6). */
+  function autoMove(list: Move[]): Move | null {
+    const clean = (m: Move) => (isWyrm(m.a) ? m.f.lost === 0 && m.f.backMax === 0 : m.f.lost < 0.5);
+    return wisest(list, clean) ?? wisest(list, (m) => (isWyrm(m.a) ? m.f.lost === 0 : m.f.lost < 0.5));
+  }
   /** Each bell: if Fight on is set and breath allows, strike; stop, and say why, when it should not go on. */
   function fightOnTick() {
     if (!fightOn || autoBusy || left) return;
@@ -481,8 +509,10 @@ export function skirmish(ctx: Ctx): Screen {
   function paintFray() {
     clear(fray);
     frayBox.hidden = !told.length;
+    const spoken: string[] = [];
     for (const t of told.slice(0, 8)) {
       const { head, bits } = tellBlow(t.blow, who);
+      if (t.fresh) spoken.unshift([head, ...bits.map((b) => b.text)].join('. ').replace(/\.\./g, '.'));
       // only a blow just told slides in; the rest stay put as the list is rebuilt
       const cls = 'fray-row ' + (t.ours ? 'ours' : 'theirs') + (t.fresh ? ' fresh' : '');
       t.fresh = false;
@@ -491,6 +521,7 @@ export function skirmish(ctx: Ctx): Screen {
         h('div', { class: 'fray-txt' }, h('p', { class: 'fray-head' }, head),
           h('p', { class: 'fray-bits' }, ...bits.map((b) => h('span', { class: 'fb ' + b.tone }, b.text))))));
     }
+    if (spoken.length) frayVoice.textContent = spoken.join(' ');
   }
 
   /* ── painting ─────────────────────────────────────────────────────── */
@@ -520,7 +551,7 @@ export function skirmish(ctx: Ctx): Screen {
     sc?.abroad('ours', oursAbroad()); sc?.abroad('theirs', defending());
     // a fight that begins starts a new tale
     const fighting = inFight();
-    if (fighting && !wasFighting && !(won && won.pid === targetPid)) tally = { blows: 0, felled: [], lost: [] };
+    if (fighting && !wasFighting && !(won && won.pid === targetPid)) tally = { blows: 0, felled: [], lost: [], hearts: heartsNow() };
     wasFighting = fighting;
     // a won raid stays won until the warband rides out again (a new raid, even on the same hold)
     if (won && won.pid === targetPid && !inFight()) won.home = true;
@@ -587,14 +618,14 @@ export function skirmish(ctx: Ctx): Screen {
     if (!changed('warbar', sig)) { if (L.plunder != null && plunderBar && plunderPct) { plunderBar.style.width = Math.max(4, L.plunder) + '%'; plunderPct.textContent = `${L.plunder}%`; } return; }
     clear(status);
     plunderBar = L.plunder != null ? h('i', { style: { width: Math.max(4, L.plunder) + '%' } }) : null;
-    plunderPct = L.plunder != null ? h('span', { class: 'mono' }, `${L.plunder}%`) : null;
+    plunderPct = L.plunder != null ? h('span', { class: 'mono', 'aria-hidden': 'true' }, `${L.plunder}%`) : null;
     const steps: [string, number][] = [['Choose a foe', 0], ['Ride out', 1], ['Fell their Wyrm', 2], ['Plunder', 3]];
     const at = L.step ?? -1;
     const stepper = p && !defending() && L.step != null ? h('ol', { class: 'stepper', 'aria-label': 'Raid steps' }, ...steps.map(([label, i]) => {
       const state = at === 4 || i < at ? 'done' : i === at ? (i === 3 ? 'run' : 'now') : '';
       return h('li', { class: state, 'aria-current': state === 'now' || state === 'run' ? 'step' : undefined }, h('span', { class: 'n' }, state === 'done' ? '✓' : String(i + 1)), h('span', { class: 't' }, label));
     })) : null;
-    status.append(h('div', { class: `glass warbar ${L.tone}`, role: 'status' },
+    status.append(h('div', { class: `glass warbar ${L.tone}` },
       stepper,
       h('div', { class: 'wb-main' },
         h('div', { class: 'wb-text' },
@@ -743,6 +774,8 @@ export function skirmish(ctx: Ctx): Screen {
   let dangerSaid = '';
   const sAlert = h('p', { role: 'status', 'aria-live': 'polite', style: { position: 'absolute', width: '1px', height: '1px', margin: '-1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } });
   strike.append(sAlert);
+  // the fray's voice lives on the screen itself: the fray's panel starts hidden, and a hidden region says nothing
+  el.append(frayVoice);
 
   /** The chosen blow, told before it is struck. */
   function paintStrike(p: PlayerState | null, a?: OwnedStruct, t?: OwnedStruct, r?: ReturnType<typeof reach> | null, fc?: Forecast | null, list: Move[] = []) {
@@ -763,7 +796,7 @@ export function skirmish(ctx: Ctx): Screen {
     const sig = JSON.stringify([!!p, targetPid, a?.id, a?.health, a?.ambit, a?.online, t?.id, t?.health, t?.hidden, r?.why, fc && [fc.land, fc.dmg, fc.fell, fc.fellMark, fc.backMax, fc.lost, fc.guard?.id, fc.guard?.health, fc.verdict.text], isBest, inFight(), view, strikeNote, won?.pid,
       exSig(exW), exSig(exA), asleep, f?.fleet?.status, danger, g?.id, guarding, oursAbroad()]);
     if (!changed('strike', sig)) return;
-    clear(sHead); clear(sBody); clear(sNote);
+    clear(sHead); clear(sBody); clear(sNote); clear(sDanger);
     const name = (s: OwnedStruct, mine: boolean) => `${mine ? 'Your' : `${foeName()}’s`} ${beastName(s.typeId)}`;
     sHead.append(
       h('p', { class: 'fc-who' },
@@ -796,7 +829,9 @@ export function skirmish(ctx: Ctx): Screen {
           fc.dodgeBy && fc.land < 0.995 ? `${fc.dodgeBy} turns aside ${Math.round((1 - fc.land) * 3) === 2 ? 'two' : 'some'} of every three ${fc.arm.guided ? 'seeking' : 'flung'} blows. ` : '',
           fc.stone ? `Stone-skin softens it by ${fc.stone}. ` : fc.cracks ? 'It cracks stone-skin. ' : '',
           ...fc.back.map((b) => `${b.why === 'guard' ? `Their ${beastName(b.by.typeId)} (a guard)` : b.why === 'spire' ? 'Their Thunder Spire' : 'It'} strikes back for ${b.dmg}${b.why === 'mark' ? ' if it lives' : ''}. `)),
-        h('p', { class: 'fc-verdict ' + fc.verdict.tone }, fc.verdict.text));
+        h('p', { class: 'fc-verdict ' + fc.verdict.tone }, fc.verdict.text),
+        // said before the first wound, not after: a struck Wyrm keeps its wounds for good
+        isWyrm(a) && fc.backMax > 0 && fc.lost < 0.995 ? h('p', { class: 'fc-wound' }, `Its answer can cost your Elder Wyrm up to ${fc.backMax} ${fc.backMax === 1 ? 'heart' : 'hearts'}, and wounds never mend.`) : '');
     } else if (a && t && r && !r.weapon) {
       sBody.append(h('p', { class: 'fc-verdict fair' }, retellError(r.why)));
       if (r.soar) {
@@ -814,7 +849,7 @@ export function skirmish(ctx: Ctx): Screen {
     // blow, that is said first and loudest, with the safe moves beside it
     const alsoA = exA && exA.by.length && exA.blows !== Infinity ? ` Their ${kinds(exA.by.map((b) => b.s))} can reach your ${beastName(exA.on.typeId)} too: ${blowsWord(exA.blows)} would fell it.` : '';
     if (danger && exW && myW) {
-      sBody.append(h('div', { class: 'fc-danger', role: 'group', 'aria-label': 'Your Elder Wyrm is in danger' },
+      sDanger.append(h('div', { class: 'fc-danger', role: 'group', 'aria-label': 'Your Elder Wyrm is in danger' },
         h('p', null, h('b', null, 'Your Elder Wyrm could fall before your next blow. '),
           `Their ${kinds(exW.by.map((b) => b.s))} can reach it ${defending() ? 'over your isle' : 'here'}, and ${answer ? 'this blow’s answer and ' : ''}one blow from each would fell it.`, alsoA),
         h('div', { class: 'fc-danger-act' },
@@ -886,6 +921,9 @@ export function skirmish(ctx: Ctx): Screen {
     sBtn.disabled = disabled;
     sBtn.classList.toggle('waiting', !!job || (fill > 0 && fill < 1));
     sBtn.classList.toggle('deadly', /anyway\?$/.test(label));
+    // a button that has turned from striking to keeping safe (guard the Wyrm, take it home) wears gold, not ember,
+    // so a warden pressing again and again sees at once that it no longer strikes
+    sBtn.classList.toggle('safe', /^(Guard your Wyrm|Ride home)/.test(label));
     sBtn.style.setProperty('--fill', String(fill));
     sBtn.setAttribute('aria-label', sub ? `${label}: ${sub}` : label);
     // why the button waits, in one line

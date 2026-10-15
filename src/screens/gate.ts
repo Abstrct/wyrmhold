@@ -10,6 +10,7 @@ import { playPrologue, prologueSeen } from '../ui/prologue';
 import { sheaves } from '../lore';
 import { onAway } from '../game/away';
 import { awayLine } from '../ui/harm';
+import { enlisting } from '../game/enlist';
 
 export function gate(ctx: Ctx): Screen {
   const canvas = h('canvas');
@@ -26,7 +27,9 @@ export function gate(ctx: Ctx): Screen {
   let said = '';
   const greet = () => {
     const p = empire.commander;
-    const head = p && sworn() ? `Welcome back, ${playerName(p)}.` : '';
+    // a warden sworn in this very visit is new here, not back
+    const fresh = enlisting.current?.status === 'done' || enlisting.running;
+    const head = p && sworn() ? `${fresh ? 'Welcome' : 'Welcome back'}, ${playerName(p)}.` : '';
     const wyrm = p && [...p.structs.values()].some((x) => x.typeId === 1 && !x.destroyed);
     const rest = !head ? '' : (!p!.planetId ? ' Seek your isle at your Hold.' : wyrm ? (p!.fleet?.status === 'away' ? ' Your Elder Wyrm rides abroad; your hold stands unguarded.' : ' Your Elder Wyrm keeps watch.') : ' Your Elder Wyrm has fallen: hatch a new one at your Hold.')
       + (p!.ore > 0 ? ` ${sheaves(p!.ore)} of wildroot ${p!.ore === 1 ? 'waits' : 'wait'} in your stores.` : '');

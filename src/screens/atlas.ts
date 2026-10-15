@@ -113,7 +113,12 @@ export function atlas(ctx: Ctx): Screen {
   function pick(i: number | null) {
     sel = i ?? -1; scene?.get()?.select(i); paint();
     // on a phone the chosen isle's card sits below the list: bring it up
-    if (i != null && matchMedia('(max-width: 720px)').matches) requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    // wherever the chosen isle's card sits (below the list on a phone, above it in a scrolled column held sideways),
+    // bring it into view when it is not: a tap that only moved the map read as a broken button
+    if (i != null) requestAnimationFrame(() => {
+      const r = card.getBoundingClientRect();
+      if (r.top < 0 || r.top > innerHeight - 120) card.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    });
   }
 
   // the panels rebuild as the ledger moves (the scouted warden is read again and again):
@@ -195,7 +200,11 @@ export function atlas(ctx: Ctx): Screen {
           you ? h('p', { style: { margin: '14px 0 0', fontSize: '15px', color: '#cfc5dd' } }, 'Your own isle, drifting where the old sky set it.') : scoutBox,
           // One road to a raid: the Skirmish walks it step by step (ride out, strike, plunder).
           you ? h('a', { class: 'btn gold block', href: '/hold', style: { marginTop: '16px', minHeight: '54px' } }, 'Go to your Hold')
-            : h('a', { class: 'btn ember block', href: `/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
+            // a full sky cannot be ridden into: the road stays open to look, but it is not the bright call to war
+            : skyFull(empire.players.get(w.id)?.planet, empire.commander)
+              ? h('a', { class: 'btn block', href: `/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '16px' } }, 'Look at their hold', icon(ICON.arrow, 18))
+              : h('a', { class: 'btn ember block', href: `/skirmish/${w.id}`, 'data-tut': 'ride', style: { marginTop: '16px', minHeight: '54px', fontSize: '17px' } }, 'Raid this hold', icon(ICON.arrow, 18)),
+          !you && skyFull(empire.players.get(w.id)?.planet, empire.commander) ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Another warband already hangs over their isle. You can ride there once it leaves.') : '',
           // a raid on an empty hold only breaks things: say so before the ride
           !you && sightOk && oreOf(w) === 0 ? h('p', { class: 'faint', style: { margin: '6px 0 0', fontSize: '13px' } }, 'Nothing unbrewed to plunder there right now. Amber isles hold a prize.') : '',
           you ? '' : h('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } },

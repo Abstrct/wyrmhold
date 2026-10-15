@@ -12,7 +12,7 @@ import { audio } from '../core/audio';
 import { enlisting } from '../game/enlist';
 import { proclaim } from './omens';
 import { live } from '../chain/live';
-import { omenSight, playerName } from '../realm';
+import { omenSight, playerName, skyFull } from '../realm';
 import { LONG_ASLEEP, alive, blowsWord, exposure, guardsOf, inRealm, kinds, raidOdds, wardKeeper, type RaidOdds } from '../game/war';
 
 interface Step {
@@ -86,7 +86,7 @@ const STEPS: Step[] = [
   { id: 'cauldron', title: 'Raise a Dawn Cauldron', route: '/hold', glow: 'summon', aim: 'Summon',
     say: 'Raiders can carry off wildroot. A Dawn Cauldron brews it into alpha, and brewed alpha can never be taken.',
     do: 'Press Summon, then choose the Dawn Cauldron.',
-    done: 'Good. From now on, what you delve, you keep.', test: (p) => owns(p, 15) },
+    done: 'Good. From now on, what you delve becomes alpha in time, and alpha no raider can take.', test: (p) => owns(p, 15) },
   { id: 'alpha', title: 'Understand alpha', route: '/grimoire', glow: 'tale', aim: 'the old tale',
     say: 'Alpha is the first light, fallen when the sky broke. It feeds your springs, calls your beasts, and the covens honour it as coin.',
     do: 'Open the Grimoire and read the old tale.',
@@ -96,7 +96,7 @@ const STEPS: Step[] = [
     do: 'In the Leyweave, press Tithe. You can take it back later.',
     done: 'Your flow rises. The leylines hum your name.', test: () => !!flags.tithe, ready: (p) => !!p && p.alpha > 0n },
   { id: 'atlas', title: 'Read the sky', route: '/atlas', glow: 'rich', aim: 'Unbrewed wildroot',
-    say: 'Every light out there is a warden: sleeping, scheming, or watching you. Amber isles hold a prize.',
+    say: 'Every light out there is a warden: sleeping, scheming, or watching you. Isles marked with wildroot hold a prize. Raiding is a choice, never a duty: a warden may keep to their own isle, guard it, and brew in peace.',
     do: 'In the Sky Atlas, press “Unbrewed wildroot” to show the rich isles.',
     done: 'You see them now. Some of them see you.', test: (p) => !!flags.atlas || !!flags.ride || p?.fleet?.status === 'away' },
   { id: 'ride', title: 'Ride out', route: '/atlas', glow: 'ride', alt: ['atlas'],
@@ -118,7 +118,16 @@ const route = () => whereNow();
 function grieving(p: PlayerState | null): boolean {
   if (!p?.planetId) return false;
   const wyrms = [...p.structs.values()].filter((s) => s.typeId === 1);
-  return !wyrms.some((s) => !s.destroyed) && (wyrms.length > 0 || !!flags.wyrm);
+  if (wyrms.some((s) => !s.destroyed)) return false;
+  // a new egg already laid (Hatch anew pressed): its hatching may not be read back for a while, so it is not grief
+  if (hatchLaid(p.playerId)) return false;
+  return wyrms.length > 0 || !!flags.wyrm;
+}
+/** A Hatch anew on its way, or landed within the hour (the new Wyrm may not be listed until it wakes). */
+function hatchLaid(pid: string): boolean {
+  return txq.jobs.some((j) => j.playerId === pid
+    && j.msgs.some((m) => /MsgStructBuildInitiate$/.test(m.typeUrl) && Number((m.value as { structTypeId?: number | string }).structTypeId) === 1)
+    && (['queued', 'waiting', 'signing', 'pending'].includes(j.status) || (j.status === 'success' && Date.now() - j.updatedAt < 3_600_000)));
 }
 /** What Ysolde says when the warden's Wyrm has fallen: a kind word and the way back, never a cheer. */
 const GRIEF: Step = { id: 'grief', title: 'Your Elder Wyrm has fallen', route: '/hold', glow: 'hatch', aim: 'Hatch anew',
@@ -187,6 +196,8 @@ function counsel(step: Step, p: PlayerState | null): Partial<Step> | null {
   const firstGuard = `Every hold I can see is awake, and an awake warden’s beasts strike whoever hangs over their isle. Set a guard beside your Elder Wyrm before you ride: a beast in ${inRealm(w.ambit)}, its own realm, takes the blows meant for it.`;
   const toGuard = { title: 'Guard your Wyrm first', do: 'At your Hold, summon a beast of your Wyrm’s realm, then press Guard… on it and choose your Elder Wyrm.', route: '/hold', glow: 'summon', alt: undefined, aim: 'Summon' };
   if (f) {
+    // their sky already holds as many raiders as it can: that is the reason, before any odds
+    if (skyFull(f.planet, p)) return { title: 'Choose another hold', say: `Another warband already hangs over ${playerName(f)}’s isle, and their sky holds no more. You can ride there once it leaves.`, do: 'In the Sky Atlas, choose another hold.', route: '/atlas', glow: 'atlas', alt: undefined, aim: 'the wardens of the sky' };
     const o = raidOdds(p, f, live.height);
     if (o.safe) return { say: oddsLine(o, playerName(f)), do: onSk ? 'Press Ride out.' : 'Press Raid this hold, then Ride out.', route: onSk ? at : '/atlas', glow: 'ride', alt: undefined };
     if (!guarded && someoneAsleep(p) === false) return { ...toGuard, say: `${oddsLine(o, playerName(f))} ${firstGuard}` };
@@ -331,6 +342,7 @@ function announce(text: string) {
 }
 /** Steps already announced this visit; the first one shown at boot is not spoken over the page's own. */
 const announced = new Set<string>();
+let lastRaidHeard = '';
 let announcedFirst = false;
 
 /** A tiny living portrait: the grey owl, breathing in her own little sky. */
@@ -424,10 +436,12 @@ function paint() {
   const cur = effective(next, p);
   shownStep = cur;
   // each new step is said once, politely, for those who cannot see her (not the one she shows at boot)
-  const heard = cur ? `${cur.id}|${cur.title}` : 'walked';
-  if (!announced.has(heard)) {
-    announced.add(heard);
-    if (announcedFirst) announce(cur ? `Ysolde: ${cur === GRIEF ? '' : 'next, '}${cur.title}. ${cur.do}` : 'Ysolde: the whole path is walked.');
+  // the raid steps keep their title while her counsel changes with the hold chosen: those are heard each time they change
+  const raid = !!cur && (cur.id === 'ride' || cur.id === 'strike');
+  const heard = cur ? `${cur.id}|${cur.title}${raid ? '|' + cur.say : ''}` : 'walked';
+  if (raid ? heard !== lastRaidHeard : !announced.has(heard)) {
+    if (raid) lastRaidHeard = heard; else announced.add(heard);
+    if (announcedFirst) announce(cur ? `Ysolde: ${cur === GRIEF ? '' : 'next, '}${cur.title}. ${raid ? cur.say + ' ' : ''}${cur.do}` : 'Ysolde: the whole path is walked.');
   }
   announcedFirst = true;
   // one measure everywhere, the pill and the card alike: how many steps are walked. A step's place in
@@ -477,7 +491,12 @@ function paint() {
     todo,
     ripening,
     cur ? h('div', { class: 'row', style: { marginTop: '10px' } },
-      h('button', { type: 'button', class: 'btn small gold', onclick: () => { go(cur.route); if (cur.glow) setTimeout(() => glow(cur.glow!), 450); } }, 'Show me'),
+      h('button', { type: 'button', class: 'btn small gold', onclick: () => {
+        // already there: going again would build the screen afresh and lose what the warden had set (the Atlas's filter)
+        const there = here(cur.route);
+        if (!there) go(cur.route);
+        if (cur.glow) setTimeout(() => glow(cur.glow!), there ? 0 : 450);
+      } }, 'Show me'),
       cur.slow ? h('span', { class: 'faint', style: { fontSize: '12px' } }, 'This one ripens slowly.') : '') : '');
   if (line !== lastSaid) { lastSaid = line; speakInto(said, line); } else said.textContent = line;
   queueMicrotask(stepAside);
@@ -515,6 +534,8 @@ export function mountGuide() {
     if (/ReactorInfuse|GeneratorInfuse/.test(urls)) markPath('tithe');
     if (/FleetMove/.test(urls)) markPath('ride');
     if (/StructAttack/.test(urls)) markPath('strike');
+    // a plunder that lands with no blow struck (their ward was already open) is a raid struck all the same
+    if (/PlanetRaidComplete/.test(urls)) markPath('strike');
   });
   window.addEventListener(ROUTE_EVENT, () => { openHere = false; paintSoon(); });
   window.addEventListener('resize', paintSoon);

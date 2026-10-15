@@ -1,6 +1,6 @@
 /* The Leyweave: where alpha becomes mana. Every coven's wellspring, the ley shrine your hold drinks
  * from, and your own tithes — all read live. Tithing and unbinding seal real rites. */
-import { h, clear, toast, confirmBox, keepFocus } from '../core/dom';
+import { h, clear, toast, confirmBox, keepFocus, holdFocus } from '../core/dom';
 import K from '../world/wyrmkit.js';
 import { mountScene, type Ctx, type Screen } from './types';
 import { topbar } from '../ui/frame';
@@ -127,6 +127,7 @@ export function leyweave(ctx: Ctx): Screen {
           h('button', { type: 'button', class: 'btn ghost', onclick: () => none.remove() }, 'Close'),
           h('a', { class: 'btn gold', href: '/hold', onclick: () => none.remove() }, 'Go to my Hold'))));
       document.body.append(none);
+      holdFocus(none);
       return;
     }
     const amt = h('input', { id: 'tithe-amt', type: 'number', min: '0.000001', step: '0.1', value: '1' }) as HTMLInputElement;
@@ -164,6 +165,7 @@ export function leyweave(ctx: Ctx): Screen {
           } catch (e) { toast(speak((e as Error).message), 'enemy'); }
         } }, unbind ? 'Unbind' : 'Tithe'))));
     document.body.append(veil);
+    holdFocus(veil, amt);
   }
 
   function card(title: string, eyebrow: string, color: string, body: (Node | string)[]) {

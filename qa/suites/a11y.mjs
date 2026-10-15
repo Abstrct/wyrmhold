@@ -214,6 +214,8 @@ export default async function (t, ctx) {
       await openGame(page, ctx.app.url, '#/hold', { storage, sworn: true, playerId: nw.pid, viewport: { width: 1280, height: 800 } });
       await awake(page);
       await page.waitFor(`document.querySelector('[data-tut="summon"]') && [...document.querySelectorAll('.path button')].some((b) => /Show me/.test(b.textContent))`, { what: 'Ysolde open on the Hold, and Summon', timeout: 30000 });
+      // Ysolde clears her region and speaks a beat later (so the same words twice are heard twice): wait for the words
+      await page.waitFor(`/Summon a Root Delver/.test(document.querySelector('.path [aria-live]')?.textContent || '')`, { what: 'the new step to be spoken', timeout: 3000 }).catch(() => {});
       const live = await page.eval(`(() => { const l = document.querySelector('.path [aria-live]'); return l ? { live: l.getAttribute('aria-live'), text: l.textContent } : null; })()`);
       expect.eq(live && live.live, 'polite', 'Ysolde speaks through a polite live region');
       expect.ok(/Summon a Root Delver/.test(live.text), 'the newly current step is announced', live);

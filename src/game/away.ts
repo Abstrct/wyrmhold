@@ -31,6 +31,8 @@ export interface AwayReport {
   /** Beasts that stood when they left and have fallen since, that no deed in the record tells of. */
   lost: { id: string; typeId: number }[];
   base: Sketch;
+  /** Away a while and nothing to tell: said plainly ("all quiet"), so a warden is not left to audit the Chronicle. */
+  quiet?: boolean;
 }
 
 const reports = new Map<string, AwayReport>();
@@ -121,6 +123,8 @@ function make(pid: string) {
   const away = Date.now() - prev.at > ABSENT_MS;
   if (old || unseen.length || (away && (good.length || lost.length))) {
     reports.set(pid, { pid, id: old?.id ?? ++seq, since: old?.since ?? prev.at, harms: list, good, lost, base });
+  } else if (away) {
+    reports.set(pid, { pid, id: ++seq, since: prev.at, harms: [], good: [], lost: [], base, quiet: true });
   }
   writeSketch(pid, { ...now, at: Date.now(), ...seenUpTo(prev, all, top) });
   emit();

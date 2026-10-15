@@ -30,18 +30,28 @@ function isleOf(planetId?: string) { for (const p of empire.players.values()) if
 
 /** A great banner across the sky for the moments that matter. Banners never stack: one that comes while
  * another is up waits its turn, and cuts the one before it short (but never before it can be read). */
-const banners: [string, string, 'gold' | 'ember'][] = [];
+const banners: [string, string, 'gold' | 'ember', boolean][] = [];
 let showing: { el: HTMLElement; at: number; timer: number } | null = null;
-export function proclaim(title: string, line: string, tone: 'gold' | 'ember') {
-  banners.push([title, line, tone]);
+/** The banners' voice: one region that stays, so a screen reader hears each banner (a region inserted with its
+ * words already in it is seldom read). `quiet` for a banner whose caller speaks its own line. */
+let bannerVoice: HTMLElement | null = null;
+function speakBanner(text: string) {
+  if (!bannerVoice || !bannerVoice.isConnected) { bannerVoice = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'assertive', 'data-voice': 'banner' }); document.body.append(bannerVoice); }
+  const v = bannerVoice;
+  v.textContent = '';
+  setTimeout(() => { v.textContent = text; }, 60);
+}
+export function proclaim(title: string, line: string, tone: 'gold' | 'ember', opts: { quiet?: boolean } = {}) {
+  banners.push([title, line, tone, !!opts.quiet]);
   if (!showing) nextBanner();
   else { clearTimeout(showing.timer); const s = showing; s.timer = window.setTimeout(() => endBanner(s.el), Math.max(0, s.at + 2400 - Date.now())); }
 }
 function nextBanner() {
   const b = banners.shift();
   if (!b) { showing = null; return; }
-  const [title, line, tone] = b;
-  const el = h('div', { class: `proclaim ${tone}`, role: 'status', 'aria-live': 'assertive' }, h('p', { class: 'proclaim-title' }, title), h('p', { class: 'proclaim-line' }, line));
+  const [title, line, tone, quiet] = b;
+  const el = h('div', { class: `proclaim ${tone}`, 'aria-hidden': 'true' }, h('p', { class: 'proclaim-title' }, title), h('p', { class: 'proclaim-line' }, line));
+  if (!quiet) speakBanner(`${title}. ${line}`);
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('on'));
   showing = { el, at: Date.now(), timer: window.setTimeout(() => endBanner(el), banners.length ? 2400 : 5200) };

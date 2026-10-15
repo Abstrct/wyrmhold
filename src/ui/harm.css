@@ -1,7 +1,6 @@
 /* Being raided, told: the "While you were away" card, the Chronicle's lines of harm, the alert that
  * stays while raiders hang over your isle, and the voice only screen readers hear. */
 
-.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* While you were away */
 .away-card { flex: none; border-color: rgba(255, 138, 90, .5); box-shadow: 0 0 40px rgba(255, 122, 77, .12); }

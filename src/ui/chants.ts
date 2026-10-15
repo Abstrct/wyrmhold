@@ -169,8 +169,8 @@ export function chantSung(j: TxJob) {
   const msg = j.msgs.map((m) => m.typeUrl).join();
   if (/StructBuildComplete/.test(msg)) {
     const beast = what.replace(/^.*chant · /i, '').replace(/^The /, '') || 'beast';
-    proclaim(`The ${beast} wakes`, 'Your summoning is sung. It stands on your isle now, and works on its own.', 'gold');
-    say(`Your ${beast} has woken. It stands on your isle now.`);
+    proclaim(`The ${beast} wakes`, 'Your summoning is sung. It is bound to you now, and works on its own.', 'gold', { quiet: true });
+    say(`Your ${beast} has woken. It is bound to you now.`);
     audio.stinger('alpha', 0.6);
     return;
   }
@@ -179,7 +179,7 @@ export function chantSung(j: TxJob) {
   const brew = /OreRefineryComplete/.test(msg), key = (brew ? 'brew|' : 'delve|') + j.playerId;
   if (Date.now() - (toldAt.get(key) || 0) < 90_000) return;
   toldAt.set(key, Date.now());
-  toast(brew ? 'A sheaf of wildroot was brewed into alpha. No raider can take it now.' : 'A sheaf of wildroot was delved. Brew it before raiders find it.', 'player', 5000);
+  toast(brew ? 'A sheaf of wildroot was brewed into alpha. No raider can take it now.' : 'A sheaf of wildroot was delved. Your Dawn Cauldron brews it on its own; until then, raiders can steal it.', 'player', 5000);
   audio.stinger('alpha', 0.5);
 }
 

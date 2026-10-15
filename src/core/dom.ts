@@ -43,6 +43,29 @@ export function keepFocus(box: Element, rebuild: () => void) {
   back?.focus({ preventScroll: true });
 }
 
+/** A modal veil keeps the keyboard: focus goes in (to `first`, else its first control), Tab wraps inside it,
+ * Escape closes it, and closing gives focus back to whatever opened it. Call once the veil is in the page. */
+export function holdFocus(veil: HTMLElement, first?: HTMLElement | null) {
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  const controls = () => [...veil.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((e) => !e.hasAttribute('disabled') && e.getClientRects().length > 0);
+  requestAnimationFrame(() => (first && first.isConnected ? first : controls()[0])?.focus());
+  veil.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); veil.remove(); return; }
+    if (e.key !== 'Tab') return;
+    const list = controls();
+    if (!list.length) return;
+    const i = list.indexOf(document.activeElement as HTMLElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); list[list.length - 1].focus(); }
+    else if (!e.shiftKey && (i === -1 || i === list.length - 1)) { e.preventDefault(); list[0].focus(); }
+  });
+  new MutationObserver((_, mo) => {
+    if (veil.isConnected) return;
+    mo.disconnect();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  }).observe(document.body, { childList: true });
+}
+
 function tray(): HTMLElement {
   let t = document.getElementById('heralds');
   if (!t) { t = h('div', { id: 'heralds', role: 'status', 'aria-live': 'polite' }); document.body.append(t); }

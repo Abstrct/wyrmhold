@@ -195,13 +195,14 @@ export class Page {
     for (let i = 1; i <= steps; i++) await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + (x1 - x0) * i / steps, y: y0 + (y1 - y0) * i / steps, button: 'left', buttons: 1 });
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: y1, button: 'left', clickCount: 1 });
   }
-  /** Press a key. Enter carries '\r' as text, or the page never sees a button activation. */
+  /** Press a key. Enter carries '\r' as text, or the page never sees a button activation. No nativeVirtualKeyCode:
+   * on macOS it names a different key (27 is not Escape there), and after one, emulated touches go unanswered. */
   async key(key, { text, code, modifiers = 0 } = {}) {
     const KEYS = { Enter: { code: 'Enter', keyCode: 13, text: '\r' }, Tab: { code: 'Tab', keyCode: 9 }, Escape: { code: 'Escape', keyCode: 27 }, ' ': { code: 'Space', keyCode: 32, text: ' ' }, ArrowDown: { code: 'ArrowDown', keyCode: 40 }, ArrowUp: { code: 'ArrowUp', keyCode: 38 }, ArrowLeft: { code: 'ArrowLeft', keyCode: 37 }, ArrowRight: { code: 'ArrowRight', keyCode: 39 } };
     const k = KEYS[key] || { code: code || 'Key' + key.toUpperCase(), keyCode: key.toUpperCase().charCodeAt(0), text: key };
     const t = text ?? k.text;
-    await this.send('Input.dispatchKeyEvent', { type: t ? 'keyDown' : 'rawKeyDown', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode, text: t, unmodifiedText: t, modifiers });
-    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode, modifiers });
+    await this.send('Input.dispatchKeyEvent', { type: t ? 'keyDown' : 'rawKeyDown', key, code: k.code, windowsVirtualKeyCode: k.keyCode, text: t, unmodifiedText: t, modifiers });
+    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, modifiers });
   }
   async type(text) { for (const ch of text) await this.send('Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch, key: ch }), await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch }); }
   /** Click the centre of the first element matching a selector (or a predicate text), scrolled into view. */

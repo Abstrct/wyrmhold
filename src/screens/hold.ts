@@ -75,16 +75,22 @@ export function hold(ctx: Ctx): Screen {
   const banner = h('div');
 
   const rosterPanel = h('aside', { class: 'glass panel col-l roster-panel', 'aria-label': 'Bound to you' }, rosterHead, filters, roster);
+  const colR = h('div', { class: 'col-r' }, away.el, card, chants.el, chron.el);
+  // "While you were away" leads: at the head of the right column, and on a phone (where the panels stack, the list
+  // of beasts first) above everything, not found after scrolling past the beasts
+  const stacked = matchMedia('(max-width: 720px), (min-width: 721px) and (max-height: 560px)');
+  const placeAway = () => { if (stacked.matches) { if (away.el.nextElementSibling !== rosterPanel) rosterPanel.before(away.el); } else if (colR.firstElementChild !== away.el) colR.prepend(away.el); };
+  stacked.addEventListener('change', placeAway);
   const el = h('div', { class: 'screen' },
     h('div', { class: 'stage' }, canvas),
     h('div', { class: 'hud' }, bar.el, banner, omens,
       // on a phone the panels stack: this keeps a clear window onto the isle above them
       h('div', { class: 'isle-window', 'aria-hidden': 'true' }),
       h('div', { class: 'cols through' },
-        rosterPanel,
-        h('div', { class: 'col-r' }, away.el, card, chants.el, chron.el)),
+        rosterPanel, colR),
       rites));
 
+  placeAway();
   const tip = cursorTip(canvas);
   const scene = mountScene(canvas, (c) => K.hold(c, { units: [], onPick: (id: string | null) => pick(id), onView: (moved: boolean) => world.moved(moved), onHover: (id: string | null) => {
     const s = id ? player()?.structs.get(id) : undefined;
@@ -151,7 +157,7 @@ export function hold(ctx: Ctx): Screen {
     clear(omens);
     // omens queue up; the most urgent two show, the rest wait behind "more"
     const queued: { rank: number; el: HTMLElement }[] = [];
-    const omen = (tone: 'ember' | 'gold' | 'teal', text: string, action?: [string, () => void]) => queued.push({ rank: tone === 'ember' ? 0 : tone === 'gold' ? 1 : 2, el: h('div', { role: 'status', class: 'glass row', style: {
+    const omen = (tone: 'ember' | 'gold' | 'teal', text: string, action?: [string, () => void], rank?: number) => queued.push({ rank: rank ?? (tone === 'ember' ? 0 : tone === 'gold' ? 1 : 2), el: h('div', { role: 'status', class: 'glass row', style: {
       padding: '8px 10px 8px 16px', borderRadius: '999px', fontSize: '15px', flexWrap: 'nowrap',
       borderColor: tone === 'ember' ? 'rgba(255,122,77,.55)' : tone === 'gold' ? 'rgba(232,200,114,.5)' : 'rgba(95,211,181,.5)',
       background: tone === 'ember' ? 'rgba(60,24,18,.82)' : undefined, color: tone === 'ember' ? 'var(--ember-ink)' : undefined,
@@ -169,10 +175,10 @@ export function hold(ctx: Ctx): Screen {
       if (p.capacity + p.connectionCapacity - p.load - p.structsLoad < BigInt(t.buildDraw)) { toast('Not enough spare mana to hatch a Wyrm. Let something slumber, or feed a spring.', 'warn', 6000); return; }
       rite(p, () => act.build(p, t, 'land', 0), false);
       toast('An egg is laid in the Wilds. The hatching chant begins as soon as the circle lands.', 'player', 5000);
-    }]);
+    }], -1);
     for (const r of raiders) {
       if (mine) omen('ember', `Raiders hang over your isle: ${who(r.owner)} warband. Fell their Elder Wyrm and the plunder breaks.`, ['Defend', () => ctx.go(`/skirmish/${r.owner}`)]);
-      else omen('gold', `${who(r.owner).replace(/^y/, 'Y')} warband hangs over this isle. Fell their Elder Wyrm and the plunder chant runs.`, wallet.byPlayer(r.owner) ? ['Fight', () => ctx.go(`/skirmish/${p.playerId}`)] : undefined);
+      else omen('gold', `${who(r.owner).replace(/^./, (c) => c.toUpperCase())} warband hangs over this isle. Fell their Elder Wyrm and the plunder chant runs.`, wallet.byPlayer(r.owner) ? ['Fight', () => ctx.go(`/skirmish/${p.playerId}`)] : undefined);
     }
     if (!p.online) omen('ember', mine ? 'Your leylines are overdrawn: every beast gutters until load fits the flow. Slumber something, or feed a spring.' : 'Their leylines are overdrawn: their beasts gutter.');
     if (p.ore > 0 && !mine) omen('gold', `${sheaves(p.ore)} of their wildroot ${p.ore === 1 ? 'lies' : 'lie'} unbrewed: a raid could carry ${p.ore === 1 ? 'it' : 'them'} off.`, ['Plan a raid', () => ctx.go(`/skirmish/${p.playerId}`)]);
@@ -271,7 +277,7 @@ export function hold(ctx: Ctx): Screen {
     if (s.built && !hallow && s.typeId !== 1 && !s.protectedStructIndex) row.append(h('button', { type: 'button', class: 'btn small', onclick: () => guardDialog(p, s) }, 'Guard…', h('span', { class: 'cost' }, `${t.defendChangeCharge} breath`)));
     if (!hallow) row.append(h('a', { class: 'btn small', href: '/skirmish', style: { borderColor: 'rgba(255,122,77,.5)', color: 'var(--ember-ink)' } }, 'Raid with it'));
     if (s.built && s.typeId !== 1) more.append(h('button', { type: 'button', class: 'btn small ghost', style: { color: 'var(--ember-ink)' }, onclick: async () => {
-      if (await confirmBox(`Banish the ${L.name}?`, 'It is released for good. Its circle frees for another summoning.', 'Banish')) rite(p, () => act.trash(p, s), true, s.id);
+      if (await confirmBox(`Banish the ${L.name}?`, 'It is released for good, and cannot be called back. Its circle frees for another summoning.', 'Banish it', 'enemy', { safeFirst: true, stay: 'Keep it' })) rite(p, () => act.trash(p, s), true, s.id);
     } }, 'Banish'));
     card.append(row);
     // the one easy switch with a hidden cost: say it where it is pressed
@@ -410,13 +416,19 @@ export function hold(ctx: Ctx): Screen {
   }
 
   function guardDialog(p: PlayerState, s: OwnedStruct) {
-    const allies = [...p.structs.values()].filter((x) => x.id !== s.id && !x.destroyed && x.built);
+    // the Elder Wyrm first (it is what most need guarding), then beasts, then hallows, each kind in a fixed order,
+    // so a list that is read again never moves a choice under the pointer
+    const rank = (x: OwnedStruct) => (x.typeId === 1 ? 0 : x.type?.category === 'planet' ? 2 : 1);
+    const allies = [...p.structs.values()].filter((x) => x.id !== s.id && !x.destroyed && x.built)
+      .sort((a, b) => rank(a) - rank(b) || a.typeId - b.typeId || a.id.localeCompare(b.id, undefined, { numeric: true }));
+    // the ledger: a guard steps in front only for a ward in its own realm; elsewhere it can only answer strikers it reaches
+    const sameRealm = (a: OwnedStruct) => a.ambit === s.ambit;
     const veil = h('div', { class: 'veil', onclick: (e: Event) => { if (e.target === veil) veil.remove(); } }, h('section', { class: 'scroll', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Guard' },
       h('h2', null, `Whom shall the ${beastName(s.typeId)} guard?`),
-      h('p', null, 'A guard steps in front of blows aimed at its ward, when it can reach them.'),
+      h('p', null, `A guard takes the blows aimed at a ward in its own realm (your ${beastName(s.typeId)} stands in ${REALM_NAME[realmOf(s)]}). For a ward in another realm it can only strike back at whoever it can reach.`),
       h('div', { class: 'stack scroll-y', style: { maxHeight: '50vh' } }, ...allies.map((a) => h('button', { type: 'button', class: 'choice', onclick: () => { veil.remove(); rite(p, () => act.defend(p, s, a.id)); } },
         // several of a kind are told apart by number, never by their ledger mark
-        h('span', null, beastName(a.typeId) + (allies.filter((x) => x.typeId === a.typeId).length > 1 ? ` ${allies.filter((x) => x.typeId === a.typeId).indexOf(a) + 1}` : ''), h('small', null, a.type?.category === 'planet' ? 'Hallow' : REALM_NAME[realmOf(a)])), h('span', { class: 'hearts', role: 'img', 'aria-label': `vigor ${a.health} of ${a.type?.maxHealth || 0}` }, hearts(a.health, a.type?.maxHealth || 0)))))));
+        h('span', null, beastName(a.typeId) + (allies.filter((x) => x.typeId === a.typeId).length > 1 ? ` ${allies.filter((x) => x.typeId === a.typeId).indexOf(a) + 1}` : ''), h('small', null, (a.type?.category === 'planet' ? 'Hallow' : REALM_NAME[realmOf(a)]) + (sameRealm(a) ? ' · it takes its blows' : ' · another realm: it will not take its blows'))), h('span', { class: 'hearts', role: 'img', 'aria-label': `vigor ${a.health} of ${a.type?.maxHealth || 0}` }, hearts(a.health, a.type?.maxHealth || 0)))))));
     returnFocusOnClose(veil);
     document.body.append(veil);
     (veil.querySelector('.choice') as HTMLElement | null)?.focus();
@@ -520,7 +532,7 @@ export function hold(ctx: Ctx): Screen {
 
   return {
     el, title: watching ? 'Watching a hold' : 'The Hold',
-    leave: () => { framer.dispose(); offWorld(); world.dispose(); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); away.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
+    leave: () => { stacked.removeEventListener('change', placeAway); framer.dispose(); offWorld(); world.dispose(); offs.forEach((f) => f()); watching$.forEach((f) => f()); pendingClaims.forEach(releaseClaim); scene.dispose(); tip.dispose(); bar.dispose(); chants.dispose(); chron.dispose(); away.dispose(); if (watching) empire.unwatch(watching); document.querySelectorAll('.veil').forEach((v) => v.remove()); },
   };
 }
 
