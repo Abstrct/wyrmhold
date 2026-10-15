@@ -19,6 +19,10 @@ export class Ledger {
     this.log = [];
     this.sockets = new Set();
     this.txs = new Map();   // hash → { height, raw }
+    /** Every rite struck on the live feed, as the node's indexer keeps it for its search (`GET /cosmos/tx/v1beta1/txs?query=`). */
+    this.indexed = [];
+    /** Each search asked of it: { query, page, limit, order, at }. */
+    this.searches = [];
     this.sequences = new Map();
     this.refusals = [];   // txs sealed by one key for another's messages, as the ante handler refuses them
     this.ticking = 0;
@@ -84,6 +88,10 @@ export class Ledger {
   emitTx(events, { hash = randomBytes(16).toString('hex').toUpperCase(), signer = '', action = '' } = {}) {
     const evs = events.map((e) => ({ type: 'structs.structs.' + e.type, attributes: [{ key: e.key || Object.keys(e.data || {})[0] || 'detail', value: typeof e.data === 'string' ? e.data : JSON.stringify(e.data) }] }));
     evs.unshift({ type: 'message', attributes: [{ key: 'sender', value: signer }, { key: 'action', value: action }] });
+    // the indexer keeps it, so a client that was away can search for it later (the same rite twice is one)
+    const kept = { hash, height: this.world.height, at: Date.now(), events: evs };
+    const i = this.indexed.findIndex((t) => t.hash === hash);
+    if (i >= 0) this.indexed[i] = kept; else this.indexed.push(kept);
     this.broadcast({ jsonrpc: '2.0', id: 2, result: { query: "tm.event='Tx'", data: { type: 'tendermint/event/Tx', value: { TxResult: { height: String(this.world.height), result: { events: evs } } } }, events: { 'tx.hash': [hash] } } });
   }
   broadcast(msg) { const frame = encodeFrame(JSON.stringify(msg)); for (const s of this.sockets) { try { s.write(frame); } catch { /* gone */ } } }
@@ -216,9 +224,38 @@ export class Ledger {
       if (this.onBroadcast) this.onBroadcast(hash, raw);
       return json(res, 200, { tx_response: { code: 0, codespace: '', raw_log: '[]', txhash: hash } });
     }
+    if (path === '/cosmos/tx/v1beta1/txs' && method === 'GET') return this.searchTxs(q, res);
     const mt = /^\/cosmos\/tx\/v1beta1\/txs\/([0-9A-Fa-f]+)$/.exec(path);
     if (mt) { const t = this.txs.get(mt[1].toUpperCase()); if (!t || !t.height) return json(res, 404, { code: 5, message: `tx not found: ${mt[1]}` }); return json(res, 200, { tx_response: { txhash: mt[1], height: String(t.height), code: t.code || 0, raw_log: t.log || '[]', gas_used: '110000', events: t.events || [] } }); }
     return notFound(res, path);
+  }
+
+  /** The node's tx search, as far as clients ask it: conditions joined by AND, each `<type>.<attribute> CONTAINS '<text>'`,
+   * `<type>.<attribute> = '<text>'` or `tx.height <op> N`; newest first with order_by=ORDER_BY_DESC; paged by page/limit
+   * (the node ignores pagination.*, and refuses a page past the last, as this one does). */
+  searchTxs(q, res) {
+    const query = q.get('query') || '';
+    if (!query.trim()) return json(res, 400, { code: 3, message: 'query cannot be empty', details: [] });
+    const conds = [];
+    for (const part of query.split(/\s+AND\s+/i)) {
+      const c = part.trim();
+      let m;
+      if ((m = /^tx\.height\s*(>=|<=|>|<|=)\s*(\d+)$/.exec(c))) conds.push({ op: m[1], n: Number(m[2]) });
+      else if ((m = /^([\w.]+)\.(\w+)\s+CONTAINS\s+'(.*)'$/.exec(c))) conds.push({ type: m[1], attr: m[2], has: m[3] });
+      else if ((m = /^([\w.]+)\.(\w+)\s*=\s*'(.*)'$/.exec(c))) conds.push({ type: m[1], attr: m[2], is: m[3] });
+      else return json(res, 500, { code: 13, message: `failed to search for txs: unsupported condition: ${c}`, details: [] });
+    }
+    const cmp = (h, { op, n }) => (op === '>' ? h > n : op === '>=' ? h >= n : op === '<' ? h < n : op === '<=' ? h <= n : h === n);
+    const hit = (t) => conds.every((c) => (c.op ? cmp(t.height, c) : t.events.some((e) => e.type === c.type && e.attributes.some((a) => a.key === c.attr && (c.has != null ? String(a.value).includes(c.has) : String(a.value) === c.is)))));
+    const order = q.get('order_by') || '';
+    let found = this.indexed.filter(hit);
+    found = order === 'ORDER_BY_DESC' || order === '2' ? [...found].reverse().sort((a, b) => b.height - a.height) : [...found].sort((a, b) => a.height - b.height);
+    const limit = Math.max(1, Math.min(100, Number(q.get('limit') || 100))), page = Math.max(1, Number(q.get('page') || 1));
+    this.searches.push({ query, page, limit, order, at: Date.now() });
+    const last = Math.max(1, Math.ceil(found.length / limit));
+    if (page > last) return json(res, 500, { code: 13, message: `failed to search for txs: page should be within [1, ${last}] range, given ${page}`, details: [] });
+    const rows = found.slice((page - 1) * limit, page * limit).map((t) => ({ height: String(t.height), txhash: t.hash, codespace: '', code: 0, data: '', raw_log: '', logs: [], info: '', gas_wanted: '200000', gas_used: '110000', tx: null, timestamp: new Date(t.at).toISOString().replace(/\.\d+Z$/, 'Z'), events: t.events }));
+    return json(res, 200, { txs: [], tx_responses: rows, pagination: null, total: String(found.length) });
   }
 
   /** The ante handler's first check: every message's creator must be the key that sealed the tx. The

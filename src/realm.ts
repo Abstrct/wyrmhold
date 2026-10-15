@@ -8,6 +8,7 @@ import { REALM_OF_AMBIT, skyHolds, type Realm } from './lore';
 import { grass, grassGrid, type GrassMsg } from './chain/grass';
 import { guildList } from './guild/api';
 import { safeEach } from './core/util';
+import { txq } from './wallet/queue';
 
 export interface IsleUnit { id: string; type: number; realm?: Realm; offline?: boolean; building?: boolean; plot?: number }
 
@@ -126,12 +127,22 @@ export async function raidersAt(planet: { Planet: { id: string; owner: string; l
   return out;
 }
 
+/** A ride of `playerId`'s warband to `isle` is queued, in flight, or landed within the last minute and a half. */
+function ridingTo(playerId: string | undefined, isle: string): boolean {
+  if (!playerId) return false;
+  return txq.jobs.some((j) => j.playerId === playerId
+    && j.msgs.some((m) => /MsgFleetMove$/.test(m.typeUrl) && (m.value as { destinationLocationId?: string }).destinationLocationId === isle)
+    && (['queued', 'waiting', 'signing', 'pending'].includes(j.status) || (j.status === 'success' && Date.now() - j.updatedAt < 90_000)));
+}
+
 /** An isle's sky holds 1 + its extra places of foreign warbands at once (msg_server_fleet_move.go), and the
  * ledger refuses a ride into a full one ("queue_full"). Why `rider` cannot ride there now, or null if it can. */
-export function skyFull(isle: PlanetFull | null | undefined, rider?: { planetId: string; fleet: RawFleet | null } | null): string | null {
+export function skyFull(isle: PlanetFull | null | undefined, rider?: { planetId: string; fleet: RawFleet | null; playerId?: string } | null): string | null {
   if (!isle || isle.Planet.id === rider?.planetId) return null;
   // a warband already in that sky is one of the raiders it holds
   if (rider?.fleet?.status === 'away' && rider.fleet.locationId === isle.Planet.id) return null;
+  // our own ride there is on its way or just landed: the isle may count our warband before our record does
+  if (ridingTo(rider?.playerId, isle.Planet.id)) return null;
   const cap = 1 + num(isle.Planet.locationListExtra);
   return num(isle.Planet.locationListCount) >= cap ? `Another warband already hangs over that isle, and ${skyHolds(cap)}. You can ride out once it leaves.` : null;
 }

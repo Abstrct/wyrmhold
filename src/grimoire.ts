@@ -16,7 +16,7 @@ export const THINGS: [string, string][] = [
   ['Breath', 'Your readiness to act, shared by your whole warband. One draws in with every bell; summoning, striking, riding out or guarding spends it all.'],
   ['Ward', 'How long a raider must chant to break into your hold. Lanterns, moons, vaults and spires raise it.'],
   ['Bell', 'The sky’s heartbeat — about six seconds. Everything in the realm happens on a bell.'],
-  ['Chant', 'Summoning, delving, brewing and plundering each need one. Your Hold sings them for you on this computer; each grows easier with time and lands the moment it is ripe.'],
+  ['Chant', 'Summoning, delving, brewing and plundering each need one. A chant grows easier with time, even while Wyrmhodl is closed: a summoning takes minutes to hours, a sheaf of wildroot about half a day to delve and most of a day to brew. Come back and a ripe chant is finished in moments; left open, Wyrmhodl chants on with this device’s spare strength, and a lucky chant lands sooner.'],
   ['Isle', 'A shard of the old sky. It holds a finite marrow of wildroot; when it is spent, a warden seeks another.'],
   ['Warband', 'Your beasts that fly. They ride out together, and while they are abroad your hold has no beasts to guard it.'],
   ['Coven', 'Wardens sworn together. A coven lends its leyline to the newly sworn, and its wellspring pours mana for all who tithe.'],
@@ -61,6 +61,7 @@ export function laws(): [string, string][] {
     ['Answer', `A struck beast that lives strikes back, if it is awake and can reach its striker’s realm. The Siege Treant is the exception both ways: nothing answers its blows, and it never answers. The Siren answers ${sr.counterAttackSameAmbit} in its own waters.`],
     ['Guard', 'A guard strikes back at whoever strikes its ward, if it can reach them, and takes the blow itself when it stands in the ward’s own realm. Fell the guard first.'],
     ['The Elder Wyrm', 'It strikes only in its own realm and must soar to reach another. Every raid rides on it: if a raider’s Wyrm falls, the raid breaks and the warband flees home.'],
+    ['Wounds', 'Wounds never mend: no rite heals a beast, and every heart it loses stays lost. A fallen beast can be summoned anew at full hearts, and a fallen Elder Wyrm hatches anew. While your warband hangs over their isle, their beasts that reach yours can strike it, not only answer your blows: the Skirmish counts how many blows would fell your Wyrm.'],
     ['Plunder', 'Takes unbrewed wildroot, never alpha, never a soulstone. Fell the raider’s Elder Wyrm and the plunder breaks.'],
   ];
 }

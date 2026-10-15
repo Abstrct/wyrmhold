@@ -1,7 +1,7 @@
 /* The Oath: binding a soulstone (the wallet), keeping its soul-words, swearing to a coven (guild
  * signup through the guild's signer) and seeking an isle (MsgPlanetExplore) — and, once sworn, the
  * soulstone itself: its address, its soul-words, and forgetting it. Keys never leave this tab. */
-import { h, clear, confirmBox, toast } from '../core/dom';
+import { h, clear, confirmBox, toast, keepFocus } from '../core/dom';
 import { ROUTE_EVENT, go, here } from '../core/nav';
 import { wallet } from '../wallet/wallet';
 import { enlist, enlisting, retryEnlist } from '../game/enlist';
@@ -154,7 +154,9 @@ export function openOath(start?: unknown) {
     const was = document.activeElement;
     const at = was instanceof HTMLInputElement || was instanceof HTMLTextAreaElement ? was : null;
     const keep = at && body.contains(at) && at.id ? { id: at.id, s: at.selectionStart, e: at.selectionEnd } : null;
-    draw();
+    // the ledger redraws this dialog every few bells: a focused button ("Enter your Hold") keeps its focus,
+    // or a keyboard press lands on nothing (a screen-reader player found it dead)
+    keepFocus(body, draw);
     const back = keep && document.getElementById(keep.id);
     if (back instanceof HTMLInputElement || back instanceof HTMLTextAreaElement) { back.focus(); try { back.setSelectionRange(keep!.s, keep!.e); } catch { /* not a text field */ } }
   }
@@ -268,7 +270,13 @@ export function openOath(start?: unknown) {
             h('div', null, h('dt', null, 'Isle mark'), h('dd', { class: 'mono' }, empire.commander?.planetId || 'none yet')),
             h('div', { style: { gridColumn: 'span 2' } }, h('dt', null, 'Soulstone mark'), h('dd', { class: 'mono', style: { fontSize: '13px' } }, '…' + a.address.slice(-12)))),
           h('button', { type: 'button', class: 'btn ghost small', style: { marginTop: '14px', color: 'var(--ember-ink)' }, onclick: async () => {
-            if (await confirmBox('Forget this soulstone?', 'It leaves this browser. Only your soul-words can bring your warden back.', 'Forget it')) { wallet.forget(); close(); }
+            // the most dangerous button in the game: a young player once pressed it to "start fresh". The safe choice is
+            // the bright one, and the words say what is lost, plainly
+            const kept = wallet.backedUp;
+            const text = kept
+              ? ['Your warden, its isle and its beasts leave this browser. They come back only if you speak your soul-words again.', 'This does not start a new game for them: it only lets them go from here.']
+              : ['You have not kept your soul-words. Forget this soulstone and your warden, its isle and its beasts are lost for good: no one can bring them back.', 'Keep your soul-words first, if you may ever want them again.'];
+            if (await confirmBox('Forget this soulstone?', text, kept ? 'Forget it' : 'Forget it and lose my warden', 'enemy', { safeFirst: true, stay: 'Keep my warden' })) { wallet.forget(); close(); }
           } }, 'Forget this soulstone')));
       return;
     }
@@ -346,6 +354,9 @@ export function openOath(start?: unknown) {
       h('p', { class: 'label', style: { marginTop: '18px' } }, 'Choose a coven'),
       h('p', { class: 'muted', style: { margin: '4px 0 10px', fontSize: '14px' } }, 'A coven shares its leyline so your first rites have mana. Unsure? Take the first one.'),
       covenPicker(check),
+      // the time it takes, said once and plainly before the oath (players learned it too late, 2026-10-13)
+      h('p', { class: 'muted oath-time', style: { margin: '16px 0 0', fontSize: '14px' } },
+        'Know before you swear: a beast takes minutes to hours to summon, and wildroot hours to delve and brew. These chants ripen even while Wyrmhodl is closed; come back to finish them, and brew your wildroot before raiders steal it. While open, Wyrmhodl chants with this device’s spare strength, which can warm a phone.'),
       sworn,
       // a refusal is told under the button that asked
       swearErr ? h('p', { class: 'inline-err', role: 'alert' }, icon(ICON.warn, 15), h('span', null, swearErr)) : '');
@@ -354,7 +365,8 @@ export function openOath(start?: unknown) {
   // empire.onChange calls back at once: wire listeners only after the state above exists.
   offs = [wallet.onChange(() => paint()), enlisting.onChange(() => paint()), empire.onChange(() => paint()), txq.onChange(() => { if (sworeHere) paint(); })];
   // keyboard and screen-reader users land inside the dialog, on its first real choice
-  setTimeout(() => (body.querySelector('input:not([type=checkbox]), button.choice, .btn.gold') as HTMLElement | null)?.focus(), 60);
+  // the first field, choice or gold button; else (the soulstone's own view has none of those) its first control
+  setTimeout(() => ((body.querySelector('input:not([type=checkbox]), button.choice, .btn.gold') || body.querySelector('button, a[href]')) as HTMLElement | null)?.focus(), 60);
   document.addEventListener('keydown', esc);
   window.addEventListener(ROUTE_EVENT, close);
 }

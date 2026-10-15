@@ -9,8 +9,8 @@ import { resetTour, holdTour } from './tour';
 let open: HTMLElement | null = null;
 
 const LOOP: [string, string, string, string][] = [
-  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your Hold. Each summoning is sung by a chant that your Hold sings for you. The Bestiary shows every beast before you bind it.', '/hold'],
-  ['2', 'Dig and brew', 'The Delver digs up wildroot; the Cauldron brews it into alpha. Wildroot can be stolen; alpha cannot.', '/hold'],
+  ['1', 'Summon', 'Raise a Root Delver and a Dawn Cauldron on your Hold. Each summoning ends in a chant that takes minutes to a few hours. The Bestiary shows every beast before you bind it.', '/hold'],
+  ['2', 'Dig and brew', 'The Delver digs up a sheaf of wildroot in about half a day; the Cauldron brews it into alpha in most of a day. Wildroot can be stolen; alpha cannot.', '/hold'],
   ['3', 'Grow', 'In the Leyweave, tithe alpha to your coven’s wellspring for more mana, then summon beasts and wards.', '/leyweave'],
   ['4', 'Raid', 'Find an isle with unbrewed wildroot in the Sky Atlas and ride out. In the Skirmish, fell its Elder Wyrm, and the plunder is yours.', '/atlas'],
 ];
@@ -28,9 +28,12 @@ export function openHelp() {
       h('ol', { class: 'help-loop' }, ...LOOP.map(([n, t, d, href]) => h('li', null,
         h('span', { class: 'n' }, n), h('b', null, t), h('p', null, d),
         h('button', { type: 'button', class: 'btn small', onclick: go(href) }, 'Go there', icon(ICON.arrow, 14))))),
+      // the time it all takes, said plainly before anyone finds it in the Incantations panel
+      h('p', { class: 'help-time', style: { margin: '16px 0 0', fontSize: '14.5px', lineHeight: '1.45', color: 'var(--ink-2)' } },
+        h('b', null, 'Time: '), 'a beast takes minutes to hours to summon, and a sheaf of wildroot hours to delve and brew. Chants ripen even while Wyrmhodl is closed, so come back to finish them, and brew your wildroot: raiders can steal it until it is alpha. While open, Wyrmhodl chants with this device’s spare strength and can warm a phone (“Chant gently” under Incantations spares it).'),
       h('p', { class: 'label', style: { marginTop: '22px' } }, 'Words worth knowing'),
       h('dl', { class: 'help-words' }, ...Object.values(GLOSS).map(([name, what]) => h('div', null, h('dt', null, name), h('dd', null, what))),
-        h('div', null, h('dt', null, 'Chant'), h('dd', null, 'The work behind a summoning, a dig, a brew or a plunder. Your Hold sings it on this computer, and every chant gets easier as time passes.')),
+        h('div', null, h('dt', null, 'Chant'), h('dd', null, 'The work behind a summoning, a dig, a brew or a plunder. It grows easier with time, even while Wyrmhodl is closed, and is finished in moments when you return. Left open, this device chants on, and a lucky chant lands sooner.')),
         h('div', null, h('dt', null, 'Soulstone'), h('dd', null, 'Your key, sealed in this browser. Its 24 soul-words are the only way to bring your warden back anywhere else.'))),
       h('div', { class: 'row', style: { marginTop: '20px', gap: '8px' } },
         h('button', { type: 'button', class: 'btn small ghost', onclick: () => {

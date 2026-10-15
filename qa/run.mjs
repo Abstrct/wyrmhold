@@ -24,6 +24,7 @@ export const SUITES = [
   ['logic', 'Game logic', 'Catalogue, lore translator, realm mapping, formatting, action rules'],
   ['smoke', 'Smoke & stability', 'Every screen boots clean, draws a sky, throws nothing'],
   ['hold', 'The Hold', 'Roster ↔ isle parity, every beast selectable, card and rites, summoning'],
+  ['raids', 'Raids on your hold', 'Who struck and what was taken, by name: the Chronicle, While you were away, the Defend alert'],
   ['bestiary', 'Bestiary', 'Every rune shows its beast and sheet'],
   ['skirmish', 'Skirmish', 'Both warbands drawn, reach and odds, the raid stepper'],
   ['atlas', 'Sky Atlas & Leyweave & Grimoire', 'Lists, search, cards, wells, sections'],
@@ -40,7 +41,7 @@ const args = process.argv.slice(2);
 const flag = (n) => { const i = args.indexOf(n); return i >= 0 ? (args.splice(i, 1), true) : false; };
 const opt = (n, d) => { const i = args.indexOf(n); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
 if (flag('--list')) { for (const [n, p, d] of SUITES) console.log(`${n.padEnd(11)} ${p.padEnd(34)} ${d}`); process.exit(0); }
-const headed = flag('--headed'), keep = flag('--keep'), net = flag('--net');
+const headed = flag('--headed'), keep = flag('--keep'), net = flag('--net'), gpu = flag('--gpu');
 const out = resolve(opt('--out', join(HERE, 'reports', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19))));
 const appUrlOpt = opt('--app', null);
 const blockMs = Number(opt('--blockMs', 1000));
@@ -62,7 +63,7 @@ const sky = standardSky(ledger.lcdUrl);
 ledger.world = sky.w;
 sky.w.anyAddressPlayer = sky.me.pid;
 const app = appUrlOpt ? { url: appUrlOpt.replace(/\/?$/, '/'), stop: async () => {} } : await startApp({ lcdUrl: ledger.lcdUrl, wsUrl: ledger.wsUrl });
-const browser = await launchChrome({ headed });
+const browser = await launchChrome({ headed, gpu });
 console.log(`proving ground · ledger ${ledger.lcdUrl} · game ${app.url} · ${browser.version} · report ${out}`);
 
 const ctx = { browser, app, ledger, sky, report, out, net, worldLib, async newPage(o) { return browser.newPage(o); } };

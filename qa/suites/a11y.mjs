@@ -63,6 +63,31 @@ export default async function (t, ctx) {
     const dup = await page.eval(`[...document.querySelectorAll('#heralds .herald')].filter((h) => /Same word/.test(h.textContent)).length`);
     expect.eq(dup, 1, 'the same word twice is one herald with a count');
   });
+  /* A blind playtester (2026-10-13): chants finishing, a beast waking, the first wildroot and alpha were never
+   * spoken, while "Delving chant — the chant is heard" came every few seconds. Each is now told once, plainly,
+   * through the same herald main.ts gives every settled rite. */
+  await t.test('things that finish on their own are told once and plainly; “the chant is heard” is gone', 'S2', async () => {
+    const me = ctx.sky.me.pid;
+    const settle = (id, type, label) => page.eval(`const { txq } = await import('/src/wallet/queue.ts'); const j = { id: ${JSON.stringify(id)}, source: 'pow', status: 'success', msgs: [{ typeUrl: '/structs.structs.${type}', value: {} }], playerId: ${JSON.stringify(me)}, label: ${JSON.stringify(label)}, account: 0, attempts: 1, maxAttempts: 2, createdAt: Date.now(), updatedAt: Date.now() }; txq.doneL.forEach((f) => f(j)); return true`);
+    // a delve lands twice in a moment, as it does on a fast sky: one herald, no count, no repeat
+    await settle('qa-delve-1', 'MsgStructOreMinerComplete', 'Delving chant · Root Delver · chant of 7');
+    await settle('qa-delve-2', 'MsgStructOreMinerComplete', 'Delving chant · Root Delver · chant of 8');
+    await settle('qa-brew-1', 'MsgStructOreRefineryComplete', 'Brewing chant · Dawn Cauldron · chant of 7');
+    await sleep(300);
+    const h = await page.eval(`[...document.querySelectorAll('#heralds .herald')].map((x) => x.textContent)`);
+    expect.eq(h.filter((x) => /A sheaf of wildroot was delved/.test(x)).length, 1, 'a delve is told once', h);
+    expect.ok(!h.some((x) => /sheaf of wildroot was delved/.test(x) && /×\d/.test(x)), 'and not again with a count', h);
+    expect.eq(h.filter((x) => /brewed into alpha/.test(x)).length, 1, 'a brew is told once', h);
+    expect.ok(!h.some((x) => /chant is heard/.test(x)), 'the old repeating “the chant is heard” is gone', h);
+    // a beast that wakes: the banner for the eye, and a polite word in a region that was there before it
+    await settle('qa-wake-1', 'MsgStructBuildComplete', 'Summoning chant · Storm Gryphon · chant of 6');
+    await page.waitFor(`document.querySelector('.chant-news') && /Your Storm Gryphon has woken/.test(document.querySelector('.chant-news').textContent)`, { what: 'the waking told to a screen reader', timeout: 5000 });
+    const r = await page.eval(`({ live: document.querySelector('.chant-news').getAttribute('aria-live'), panelLive: document.querySelectorAll('section[aria-label=Incantations] [aria-live], section[aria-label=Incantations] [role=status]').length })`);
+    expect.eq(r.live, 'polite', 'the waking is told politely');
+    expect.eq(r.panelLive, 0, 'the Incantations panel itself announces nothing');
+    // banners wait their turn behind one already up
+    await page.waitFor(`[...document.querySelectorAll('.proclaim')].some((p) => /The Storm Gryphon wakes/.test(p.textContent))`, { what: 'the waking banner', timeout: 10000 });
+  });
   // A blind playtester (2026-10-13) could never press "Raid this hold": the Atlas and the Leyweave rebuilt
   // everything on every ledger change, throwing focus off the control and snapping "Ledger marks" shut.
   const countChanges = () => page.eval(`const { empire } = await import('/src/game/empire.ts'); window.__qaOff = empire.onChange(() => window.__qaN++); window.__qaN = 0; return true`);
@@ -178,6 +203,32 @@ export default async function (t, ctx) {
     expect.ok(await page.eval(`document.querySelector('#app .stage canvas').__wyrmCtl.census().selected`), 'a single tap still picks a beast');
     await page.screenshot(c.evidencePath('after-pinch.png'));
     expect.noErrors(page.errors(ALLOW), 'console');
+  });
+  await t.test('keyboard: Ysolde’s "Show me" moves focus to the control she points at and says so politely; a new step is announced', 'S1', async (c) => {
+    // Sam (2026-10-13): "If it just moved my focus to Summon it would be the best feature in the game for me."
+    const { w, guilds } = ctx.sky;
+    const nw = ctx.worldLib.addWarden(w, { name: 'Owlet', guildId: guilds.hearth.id, beasts: [[1]], planetOre: 5 });
+    w.anyAddressPlayer = nw.pid;
+    try {
+      const storage = { 'wyrmhold.prologue': 'seen', 'wyrmhold.tour.hold': 'seen', 'wyrmhold.music': 'off', 'wyrmhold.path.hidden': '0', ['wyrmhold.path.' + nw.pid]: JSON.stringify({ wyrm: true }) };
+      await openGame(page, ctx.app.url, '#/hold', { storage, sworn: true, playerId: nw.pid, viewport: { width: 1280, height: 800 } });
+      await awake(page);
+      await page.waitFor(`document.querySelector('[data-tut="summon"]') && [...document.querySelectorAll('.path button')].some((b) => /Show me/.test(b.textContent))`, { what: 'Ysolde open on the Hold, and Summon', timeout: 30000 });
+      // Ysolde clears her region and speaks a beat later (so the same words twice are heard twice): wait for the words
+      await page.waitFor(`/Summon a Root Delver/.test(document.querySelector('.path [aria-live]')?.textContent || '')`, { what: 'the new step to be spoken', timeout: 3000 }).catch(() => {});
+      const live = await page.eval(`(() => { const l = document.querySelector('.path [aria-live]'); return l ? { live: l.getAttribute('aria-live'), text: l.textContent } : null; })()`);
+      expect.eq(live && live.live, 'polite', 'Ysolde speaks through a polite live region');
+      expect.ok(/Summon a Root Delver/.test(live.text), 'the newly current step is announced', live);
+      // by keyboard: focus "Show me" and press Enter
+      await page.eval(`[...document.querySelectorAll('.path button')].find((b) => /Show me/.test(b.textContent)).focus()`);
+      await page.key('Enter');
+      await page.waitFor(`document.activeElement && document.activeElement.dataset.tut === 'summon'`, { what: 'keyboard focus on Summon', timeout: 20000 });
+      await page.waitFor(`/Ysolde points to Summon/.test(document.querySelector('.path [aria-live]').textContent)`, { what: 'the polite word of where she points', timeout: 10000 });
+      const inView = await page.waitFor(`(() => { const r = document.activeElement.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`, { what: 'Summon in view', timeout: 10000 }).then(() => true, () => false);
+      expect.ok(inView, 'the control she points at is in view');
+      await page.screenshot(c.evidencePath('show-me-focus.png'));
+      expect.noErrors(page.errors(ALLOW), 'console');
+    } finally { w.anyAddressPlayer = ctx.sky.me.pid; }
   });
   await page.close();
 }

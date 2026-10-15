@@ -21,12 +21,13 @@ export function findChrome() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launchChrome({ port = 9222 + Math.floor(Math.random() * 500), headed = false, width = 1280, height = 800, extraArgs = [] } = {}) {
+export async function launchChrome({ port = 9222 + Math.floor(Math.random() * 500), headed = false, width = 1280, height = 800, extraArgs = [], gpu = false } = {}) {
   const profile = join(tmpdir(), `wyrmhold-qa-${process.pid}-${port}`);
   rmSync(profile, { recursive: true, force: true }); mkdirSync(profile, { recursive: true });
   const args = [
     headed ? '' : '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
-    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--enable-precise-memory-info',
+    // software WebGL by default (the same on every machine); --gpu draws on this machine's own GPU, far faster
+    ...(gpu ? [process.platform === 'darwin' ? '--use-angle=metal' : '--use-angle=default'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']), '--ignore-gpu-blocklist', '--enable-webgl', '--enable-precise-memory-info',
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-features=BackForwardCache', `--window-size=${width},${height}`, '--hide-scrollbars',
     ...extraArgs, 'about:blank',
@@ -142,7 +143,14 @@ export class Page {
     // the new document is complete when it says so; an evaluate that lands mid-navigation is retried
     const t0 = Date.now();
     while (Date.now() - t0 < timeout) {
-      try { const r = await this.send('Runtime.evaluate', { expression: 'document.readyState + "|" + location.href', returnByValue: true }); const [state, href] = String(r.result.value).split('|'); if (state === 'complete' && (href === url || href.startsWith(url.split('#')[0]))) return; } catch { /* navigating */ }
+      // The game rewrites old '#/x' addresses into paths ('/?again=1#/hold' becomes '/hold/?again=1'), so the
+      // address alone may never match: the document's own navigation entry still names what was asked for.
+      try {
+        const r = await this.send('Runtime.evaluate', { expression: 'document.readyState + "|" + location.href + "|" + (performance.getEntriesByType("navigation")[0]?.name || "")', returnByValue: true });
+        const [state, href, asked] = String(r.result.value).split('|');
+        const base = url.split('#')[0];
+        if (state === 'complete' && (href === url || href.startsWith(base) || asked === url || asked.startsWith(base))) return;
+      } catch { /* navigating */ }
       await sleep(60);
     }
     throw new Error(`navigate ${url}: not complete after ${timeout}ms`);
@@ -187,13 +195,14 @@ export class Page {
     for (let i = 1; i <= steps; i++) await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + (x1 - x0) * i / steps, y: y0 + (y1 - y0) * i / steps, button: 'left', buttons: 1 });
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: y1, button: 'left', clickCount: 1 });
   }
-  /** Press a key. Enter carries '\r' as text, or the page never sees a button activation. */
+  /** Press a key. Enter carries '\r' as text, or the page never sees a button activation. No nativeVirtualKeyCode:
+   * on macOS it names a different key (27 is not Escape there), and after one, emulated touches go unanswered. */
   async key(key, { text, code, modifiers = 0 } = {}) {
     const KEYS = { Enter: { code: 'Enter', keyCode: 13, text: '\r' }, Tab: { code: 'Tab', keyCode: 9 }, Escape: { code: 'Escape', keyCode: 27 }, ' ': { code: 'Space', keyCode: 32, text: ' ' }, ArrowDown: { code: 'ArrowDown', keyCode: 40 }, ArrowUp: { code: 'ArrowUp', keyCode: 38 }, ArrowLeft: { code: 'ArrowLeft', keyCode: 37 }, ArrowRight: { code: 'ArrowRight', keyCode: 39 } };
     const k = KEYS[key] || { code: code || 'Key' + key.toUpperCase(), keyCode: key.toUpperCase().charCodeAt(0), text: key };
     const t = text ?? k.text;
-    await this.send('Input.dispatchKeyEvent', { type: t ? 'keyDown' : 'rawKeyDown', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode, text: t, unmodifiedText: t, modifiers });
-    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode, modifiers });
+    await this.send('Input.dispatchKeyEvent', { type: t ? 'keyDown' : 'rawKeyDown', key, code: k.code, windowsVirtualKeyCode: k.keyCode, text: t, unmodifiedText: t, modifiers });
+    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, modifiers });
   }
   async type(text) { for (const ch of text) await this.send('Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch, key: ch }), await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch }); }
   /** Click the centre of the first element matching a selector (or a predicate text), scrolled into view. */

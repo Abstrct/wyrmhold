@@ -246,6 +246,17 @@ table.t td.code { font: 500 13px var(--mono); color: var(--verdigris); white-spa
 .path-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(232,200,114,.4); background: transparent; color: var(--gold-hi); font: 500 14px var(--sans); }
 .path-burst { position: absolute; left: 50px; top: 46px; pointer-events: none; }
 .path-burst i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #ffe7a0; box-shadow: 0 0 10px #ffd27a; animation: burst 1.3s cubic-bezier(.15,.8,.3,1) forwards; }
+/* Ysolde's pill steps to another corner when its own would cover what she points at (guide.ts stepAside) */
+.path.min.at-br { left: auto; right: 16px; }
+.path.min.at-tr { left: auto; right: 16px; top: 16px; bottom: auto; }
+.path.min.at-tl { left: 16px; right: auto; top: 16px; bottom: auto; }
+/* on a phone the pill is only as wide as itself: a full-width strip took the taps meant for the rows under it */
+@media (max-width: 720px) {
+  .path.min { right: auto; }
+  .path.min.at-br, .path.min.at-tr { left: auto; right: 8px; }
+  .path.min.at-tl { left: 8px; }
+  .path.min.at-tr, .path.min.at-tl { top: 8px; }
+}
 @keyframes burst { from { transform: translate(0,0) scale(1); opacity: 1 } to { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0 } }
 @keyframes tutglow { 0%, 100% { box-shadow: 0 0 0 0 rgba(232,200,114,.0), 0 0 18px rgba(232,200,114,.35) } 50% { box-shadow: 0 0 0 8px rgba(232,200,114,.18), 0 0 36px rgba(232,200,114,.7) } }
 
@@ -283,6 +294,8 @@ body.in-prologue .gate-main, body.in-prologue .gate-foot, body.in-prologue .topb
 
 /* Gate top bar in flow on wide screens too (absolute over the stage) */
 .gate-hud { position: absolute; inset: 0 0 auto 0; height: auto; min-height: 0; }
+/* the top bar's menus (the Roads, held sideways) open over the title, never under it */
+.hud.gate-hud { z-index: 3; }
 
 @media (max-width: 720px) {
   .gate-hud { position: relative; }
@@ -509,7 +522,9 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 details.more { margin-top: 18px; border-top: 1px solid rgba(243, 235, 221, .12); padding-top: 12px; }
 details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .btn.nag { border-color: rgba(255, 138, 90, .7); color: var(--ember-ink); background: rgba(255, 122, 77, .1); }
-.btn.nag[hidden] { display: none; }
+.btn.nag/* for screen readers only: spoken, never seen */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+[hidden] { display: none; }
 @media (max-width: 720px) { .btn.nag .t { display: none; } .btn.nag { padding: 0 10px; } }
 [hidden] { display: none !important; }
 /* the guide: a short line from Ysolde, then the plain next thing to do */
@@ -655,7 +670,7 @@ dl.facts dt { font-size: 11px; }
 .codex-jumps { margin-top: 18px; gap: 6px 14px; font-size: 15px; }
 .codex-jumps .label { margin-right: 2px; }
 /* the jump links are touch targets too: a finger needs more than a line of text */
-.codex-jumps a, .codex-jumps button { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; }
+.codex-jumps a, .codex-jumps button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; }
 @media (min-width: 721px) { body.has-pill .hud > .rites { align-self: flex-end; } }
 /* trouble told beside the control that caused it */
 .inline-err { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 122, 77, .5); background: rgba(60, 20, 16, .55); font-size: 14px; line-height: 1.4; color: var(--ember-ink); }
@@ -712,6 +727,12 @@ dl.facts dt { font-size: 11px; }
 body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 /* phones: the page can scroll its last panel clear of Ysolde's pill */
 @media (max-width: 720px) { body.has-pill .hud { padding-bottom: 76px; } }
+/* Ysolde's pill sits at the bottom-left: lists and long pages end clear of it, so their last row is not under her
+   (a tap on the Bestiary's last beast once opened Ysolde instead) */
+body.has-pill .roster-panel .scroll-y, body.has-pill .beast-cols > [aria-label="Bestiary index"] .scroll-y,
+body.has-pill .beast-cols > [aria-label="Bestiary index"] { scroll-padding-bottom: 72px; }
+body.has-pill .roster-panel .scroll-y > :last-child, body.has-pill .beast-cols > [aria-label="Bestiary index"] li:last-child { margin-bottom: 64px; }
+body.has-pill .screen.scrolls > main { padding-bottom: 104px !important; }
 /* a phone held sideways is wide but short: the Gate flows top to bottom (as on a phone held upright)
    instead of centring its words under the bar */
 @media (min-width: 721px) and (max-height: 560px) {
@@ -816,6 +837,18 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 .btn.unleash.waiting .ub-fill { height: 100%; background: linear-gradient(90deg, rgba(255, 138, 90, .35), rgba(255, 192, 74, .3)); }
 .fc-pending { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
 .fc-pending:empty { display: none; }
+/* what can strike your Wyrm while you stay (not only this blow's answer), and the danger when it could fall */
+.fc-chip .s { font-size: 10.5px; line-height: 1.25; color: var(--faint); }
+.fc-wound { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--gold-hi); }
+.fc-exposed { display: flex; gap: 7px; align-items: flex-start; margin: 8px 0 0; font-size: 13.5px; line-height: 1.4; color: var(--ink-2); }
+.fc-exposed svg { flex: none; margin-top: 2px; }
+.fc-exposed.good { color: #b9f3e3; } .fc-exposed.good svg { display: none; }
+.fc-exposed.warn { color: var(--gold-hi); }
+.fc-exposed.bad { color: var(--ember-ink); }
+.fc-danger { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 0; padding: 8px 10px; border-radius: 12px; background: rgba(160, 30, 20, .35); border: 1px solid rgba(255, 90, 60, .75); color: #ffe1d6; font-size: 13.5px; line-height: 1.4; }
+.fc-danger p { flex: 1 1 260px; margin: 0; }
+.fc-danger-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.fc-danger .btn { min-height: 38px; }
 
 /* the fray: every blow, newest first */
 .fray .fray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(232,200,114,.35) transparent; }
@@ -848,7 +881,7 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 
 /* your side: the warband over the fray; mid-fight both matter, so they share the height and each keeps a floor */
 .sk-left > .sk-ours { flex: 0 1 auto; min-height: 180px; }
-.sk-left > .fray { flex: 1 1 220px; min-height: 150px; display: flex; flex-direction: column; overflow: hidden; }
+.sk-left > .fray { flex: 1 1 220px; min-height: 200px; display: flex; flex-direction: column; overflow: hidden; }
 .sk-left > .fray .fray-list { flex: 1 1 auto; min-height: 0; max-height: none; }
 /* wide screens: the two sides run the full height and the strike floats between them at the bottom */
 @media (min-width: 1100px) {
@@ -906,4 +939,144 @@ body.touring .hold-omens, body.touring .col-r .empty { visibility: hidden; }
 .scout-verdict { font-size: 14.5px; line-height: 1.4; color: var(--gold-hi); }
 .scout-reach { font-size: 13.5px; line-height: 1.4; color: #b9f3e3; }
 /* a blow that would fell your own Wyrm: the button asks again, in the colour of the warning */
+.btn.unleash.safe { background: linear-gradient(180deg, #f6e3a6, #d6ad4f); color: #2a1d08; border-color: rgba(246, 227, 166, .95); }
 .btn.unleash.deadly { background: linear-gradient(180deg, #7a2418, #4a120c); border-color: rgba(255, 90, 60, .9); color: #ffe1d6; box-shadow: 0 0 0 2px rgba(255, 90, 60, .35); }
+
+/* ── The world behind the panels (2026-10-14) ──────────────────────────────────────────────────────
+ * Phones and tablets hid the sky under their panels. Every screen with a sky now has a "look at the world"
+ * toggle that tucks the panels away (src/ui/world.ts); a phone held sideways keeps one slim bar and stacks its
+ * panels in a column on the right, so the world keeps the left; small meters say their names. */
+.world-ctl { display: inline-flex; align-items: center; gap: 6px; }
+.world-ctl .btn.small { padding: 0 12px; gap: 6px; }
+.world-ctl .btn.small > svg { flex: none; }
+.world-btn[aria-pressed="true"] { background: linear-gradient(180deg, #fff0c2 0%, #ecc96f 42%, #c9963f 100%); border-color: #f6dc94; color: #22140a; text-shadow: none; }
+/* the word beside the eye only where the bar has room for it */
+@media (max-width: 1279px) { body:not(.world-view) .world-ctl .btn.small { width: 36px; padding: 0; } body:not(.world-view) .world-ctl .btn.small .t { display: none; } }
+@media (min-width: 721px) and (max-width: 1100px) { .nav a { padding: 0 9px; } .nav-sep { margin: 0 3px; } .topbar .btn.nag { padding: 0 10px; } .topbar .btn.nag .t { display: none; } }
+.nav-menu { display: none; }
+
+/* the world view: every panel tucked away (Ysolde waits with them); the bar keeps only the world's controls */
+body.world-view .hud > :not(.topbar) { display: none !important; }
+body.world-view .topbar { display: flex !important; justify-content: flex-end; padding: 0; background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
+body.world-view .topbar > :not(.bar-actions), body.world-view .topbar .bar-actions > :not(.world-ctl) { display: none !important; }
+body.world-view .topbar .world-ctl { pointer-events: auto; }
+body.world-view .world-ctl .btn { box-shadow: 0 6px 22px rgba(0, 0, 0, .45); }
+body.world-view .world-ctl .world-home { background: rgba(14, 12, 32, .84); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+body.world-view .path { display: none !important; }
+/* the Skirmish keeps a compact strike at the foot of the sky: the next blow (or ride) and Fight on, so a fight goes on */
+body.world-view[data-route="skirmish"] .hud > .strike-row { display: flex !important; align-self: center !important; width: min(560px, 100%); margin: auto auto 0; }
+body.world-view[data-route="skirmish"] .strike-panel { flex: 0 1 480px; padding: 10px 12px; }
+body.world-view[data-route="skirmish"] .strike-panel > .fc-head, body.world-view[data-route="skirmish"] .strike-panel > .fc-body, body.world-view[data-route="skirmish"] .fc-act .seg { display: none; }
+body.world-view[data-route="skirmish"] .fc-act { margin-top: 0; flex-wrap: nowrap; }
+@media (min-width: 1100px) { body.world-view .sk-hud .strike-row { width: min(560px, calc(100% - 32px)); } }
+
+/* small meters (a phone, upright or sideways): a short name over each number, so none is a riddle */
+@media (max-width: 720px), (min-width: 721px) and (max-height: 560px) {
+  .topbar .meter { min-width: 0; padding: 4px 6px 5px; gap: 2px; justify-content: flex-start; }
+  .topbar .meter .k { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 1px 4px; font: 600 9.5px var(--mono); letter-spacing: 0; text-transform: uppercase; }
+  .topbar .meter .k > span:first-child { flex: 1 0 100%; gap: 3px; white-space: nowrap; overflow: hidden; color: inherit; letter-spacing: 0; }
+  .topbar .meter .k > span:nth-child(2) { font: 700 15px var(--sans); letter-spacing: 0; text-transform: uppercase; color: var(--ink); }
+  .topbar .meter .k .glyph { width: 11px; height: 11px; }
+  .topbar .meter .mk { font-size: 0; }
+  .topbar .meter .mk::after { content: attr(data-short); font-size: 9.5px; }
+  .topbar .meter .v { font-size: 15px; line-height: 1.15; }
+  .topbar .meter .v small { display: none; }
+  .topbar .m-alpha .v small.alpha-glyph { display: inline; font-size: 12px; }
+  .topbar .m-mana .long { display: none; }
+  .topbar .m-mana .short { display: inline; }
+  .topbar .meter .bar { height: 4px; }
+}
+
+/* a phone held upright: a vertical swipe on the sky scrolls the page (it tipped the camera into a bush); a sideways
+   one still turns the isle, and two fingers still pinch */
+@media (max-width: 720px) {
+  .screen > .stage canvas { touch-action: pan-y !important; }
+  .topbar .bar-actions { flex-wrap: nowrap; }
+  .topbar .bar-actions .world-ctl .btn > svg:first-child { display: inline; }
+  body.world-view .hud { min-height: 100vh; min-height: 100dvh; }
+  .topbar .bar-actions .btn.small[data-tut="soulstone"] { max-width: 116px; overflow: hidden; justify-content: flex-start; white-space: nowrap; }
+}
+
+/* a phone held sideways: one slim bar (the roads fold into a menu), and the panels in one column on the right */
+@media (min-width: 721px) and (max-height: 560px) {
+  .topbar, .topbar.with-meters { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; position: relative; z-index: 6; }
+  .topbar .brand { flex: none; min-height: 36px; }
+  .topbar .brand > span { display: none; }
+  .topbar .brand svg { width: 28px; height: 28px; }
+  .topbar .meters { flex: 1 1 auto; min-width: 0; max-width: 440px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .topbar .nav-menu { display: inline-flex; flex: none; max-width: 150px; padding: 0 12px; gap: 6px; }
+  .topbar .nav-menu .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .nav { display: none; }
+  .topbar.nav-open .nav { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; position: absolute; top: calc(100% + 6px); left: var(--menu-x, auto); z-index: 8; min-width: 220px; padding: 8px; gap: 2px; border-radius: 14px; border: 1px solid rgba(232, 200, 114, .45); background: rgba(20, 15, 38, .97); box-shadow: 0 16px 50px rgba(0, 0, 0, .55); }
+  .topbar.nav-open .nav-sep { width: auto; height: 1px; margin: 4px 8px; background: linear-gradient(90deg, transparent, rgba(232, 200, 114, .45), transparent); }
+  .topbar.nav-open .nav a { min-height: 40px; padding: 0 14px; border-radius: 10px; }
+  .topbar.nav-open .nav a.on::after { display: none; }
+  .topbar .bar-actions { flex: none; flex-wrap: nowrap; margin-left: auto; gap: 4px !important; }
+  .topbar .bar-actions .btn.small { padding: 0 10px; font-size: 13.5px; }
+  .topbar .bar-actions .btn.nag .t { display: none; }
+  .topbar .bar-actions .btn.small[data-tut="soulstone"] { max-width: 124px; overflow: hidden; justify-content: flex-start; white-space: nowrap; }
+  body.world-view .world-ctl .btn.small .t { display: inline; }
+
+  /* the panels: a column down the right, the sky on the left; the panel layer scrolls to reach the rest */
+  body[data-route="hold"] .hud, body[data-route="skirmish"] .hud, body[data-route="atlas"] .hud, body[data-route="bestiary"] .hud { --side-w: min(380px, 46vw); padding: 8px 10px; gap: 8px; overflow-y: auto; }
+  body[data-route="hold"] .hud > :not(.topbar), body[data-route="skirmish"] .hud > :not(.topbar), body[data-route="atlas"] .hud > :not(.topbar), body[data-route="bestiary"] .hud > :not(.topbar) { width: var(--side-w); max-width: 100%; align-self: flex-end !important; margin-left: auto; flex: none; }
+  body[data-route="hold"] .cols, body[data-route="skirmish"] .cols, body[data-route="atlas"] .cols, body[data-route="bestiary"] .cols { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: 8px; min-height: 0; overflow: visible; }
+  body[data-route="hold"] .cols > *, body[data-route="skirmish"] .cols > *, body[data-route="atlas"] .cols > *, body[data-route="bestiary"] .cols > * { flex: none !important; width: 100%; min-width: 0 !important; max-height: none !important; overflow: visible; }
+  /* the whole strip under the column (its gaps too) belongs to the panels: a drag there scrolls them, never the camera */
+  body[data-route="hold"] .hud::after, body[data-route="skirmish"] .hud::after, body[data-route="atlas"] .hud::after, body[data-route="bestiary"] .hud::after { content: ''; position: fixed; top: 0; bottom: 0; right: 0; width: calc(var(--side-w) + 20px); z-index: -1; pointer-events: auto; }
+  body.world-view .hud::after { display: none; }
+  .hud .panel { padding: 12px 14px; }
+  .hold-omens > * { font-size: 13.5px !important; }
+  /* the Hold: the rites in one slim row near the top, then a few rows of the roster in their own box, then the
+     chosen beast */
+  body[data-route="hold"] .rites { order: 1; flex-wrap: nowrap; padding: 6px; gap: 4px; }
+  body[data-route="hold"] .cols { order: 2; }
+  body[data-route="hold"] .rite { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 4px 2px; gap: 0; }
+  body[data-route="hold"] .rite small { display: none; }
+  body[data-route="hold"] .rite-mark { width: 24px; height: 24px; }
+  body[data-route="hold"] .rite b { font-size: 13px; white-space: nowrap; letter-spacing: 0; }
+  .roster-panel .list { max-height: 228px; }
+  /* the Skirmish: a compact strike first (one row of odds, the big button above the fold), then the war bar, then
+     the two warbands */
+  body[data-route="skirmish"] .strike-row { order: 2; }
+  body[data-route="skirmish"] .warbar-slot { order: 3; }
+  .warbar { padding: 8px 10px 10px 12px; }
+  .wb-title { font-size: 18px; }
+  .wb-line { font-size: 13px; }
+  .wb-main { flex-wrap: wrap; gap: 8px; }
+  .wb-main > .btn { flex: 1 1 100%; }
+  body[data-route="skirmish"] .strike-panel { flex: 1 1 auto; min-width: 0; padding: 10px 12px; }
+  .fc-who { font-size: 15px; }
+  /* six odds in one row (Lands, Deals, Leaves it at, Hits back, Their blows, Breath), so the big button stays above the fold */
+  .fc-chips { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+  .fc-chip .s { display: none; }
+  /* what can strike your Wyrm: two lines here (a screen reader still hears it whole); the red danger block stays whole */
+  .fc-exposed { font-size: 12.5px; line-height: 1.35; margin-top: 6px; }
+  .fc-exposed > span { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .fc-chip { padding: 4px 6px; }
+  .fc-chip .k { font-size: 9px; letter-spacing: .02em; white-space: normal; overflow: visible; line-height: 1.15; }
+  .fc-chip .v { font-size: 14px; }
+  .fc-verdict { font-size: 13px; padding: 5px 8px; }
+  .fc-act { margin-top: 8px; gap: 6px; }
+  .btn.unleash { flex: 1 1 150px; min-height: 50px; }
+  .fc-act .seg { flex: 1 1 100%; justify-content: center; }
+  .fc-act .seg .k { display: none; }
+  .fray .fray-list { max-height: 180px; }
+  /* the Bestiary and the Atlas: the chosen one's sheet first, the index after it in a box of its own */
+  .beast-cols > [aria-label="Bestiary index"] { order: 2; max-height: 300px !important; overflow-y: auto !important; }
+  .beast-cols > [aria-label="Beast lore"] { padding: 16px !important; }
+  .beast-cols > [aria-label="Beast lore"] h1 { font-size: 32px !important; }
+  .cols > [aria-label="Wardens"] { order: 2; }
+  .cols > [aria-label="Wardens"] .list { max-height: 240px; }
+}
+
+/* "1 more notice" is pressed by a finger too */
+@media (pointer: coarse) { .omens-more { min-height: 36px; padding: 0 14px; } }
+/* chips are pressed by fingers too: the Hold's filters, the realm chips, "Chant gently" */
+@media (pointer: coarse), (max-width: 1180px) { .chip { min-height: 36px; } }
+
+/* tablets and laptops with meters: brand and meters share the first row, the roads and buttons the second, so the
+   meters never wrap into a third row over the isle */
+@media (min-width: 1001px) {
+  .topbar.with-meters { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'brand meters meters' 'nav nav actions'; }
+}
